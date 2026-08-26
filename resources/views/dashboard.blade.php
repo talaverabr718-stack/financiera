@@ -2,8 +2,8 @@
 <x-page-header :title="$brand['system_name'] ?? 'Centro Financiero 360'" description="Panorama operativo construido con información real del sistema." eyebrow="Resumen adaptativo"><x-slot:actions><a href="{{route('applications.create')}}" class="btn-secondary"><i data-lucide="file-plus-2" class="icon"></i>Nueva solicitud</a><a href="{{route('clients.create')}}" class="btn-primary"><i data-lucide="user-plus" class="icon"></i>Nuevo cliente</a></x-slot:actions></x-page-header>
 <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 @foreach([
- ['Cartera activa','C$ '.number_format((float)$stats['activePortfolio'],2),$stats['activeLoans'].' créditos','landmark','indigo','loans.index'],
- ['Monto colocado','C$ '.number_format((float)$stats['placed'],2),$stats['clients'].' clientes','banknote','violet','loans.index'],
+ ['Cartera activa','C$ '.number_format((float)$stats['activePortfolio'],2),'Crédito vigente otorgado a los clientes','landmark','indigo','loans.index'],
+ ['Monto colocado','C$ '.number_format((float)$stats['placed'],2),'Total de préstamos desembolsados en '.now()->translatedFormat('F'),'banknote','violet','loans.index'],
  ['Cobros del día','C$ '.number_format((float)$stats['collectedToday'],2),$stats['routesToday'].' rutas programadas','hand-coins','emerald','collections.index'],
  ['Índice de mora',$stats['delinquencyRate'].'%',$stats['delinquentLoans'].' créditos en mora','bell','rose','loans.index'],
 ] as [$label,$value,$note,$icon,$color,$route])<a href="{{route($route)}}" class="metric group"><div class="flex items-start justify-between"><span class="grid h-9 w-9 place-items-center rounded-lg bg-{{$color}}-50 text-{{$color}}-600"><i data-lucide="{{$icon}}" class="icon"></i></span><i data-lucide="arrow-up-right" class="icon text-slate-300 transition group-hover:text-indigo-500"></i></div><p class="mt-4 text-[11px] font-medium text-slate-500">{{$label}}</p><p class="mt-1 text-xl font-semibold tabular-nums">{{$value}}</p><p class="mt-2 text-[10px] text-slate-400">{{$note}}</p></a>@endforeach

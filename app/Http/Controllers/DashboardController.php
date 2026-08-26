@@ -23,7 +23,7 @@ class DashboardController extends Controller
         $loans = Loan::query();
         $stats = [
             'activePortfolio' => (clone $loans)->whereIn('status', ['active', 'delinquent'])->selectRaw('COALESCE(SUM(principal_balance + interest_balance + fee_balance),0) total')->value('total'),
-            'placed' => (clone $loans)->sum('principal'),
+            'placed' => (clone $loans)->whereBetween('disbursed_at', [now()->startOfMonth(), now()->endOfMonth()])->sum('principal'),
             'collectedToday' => CollectionRecord::where('outcome', 'collected')->whereDate('recorded_at', today())->sum('amount'),
             'activeLoans' => (clone $loans)->whereIn('status', ['active', 'delinquent'])->count(),
             'delinquentLoans' => (clone $loans)->where('status', 'delinquent')->count(),
