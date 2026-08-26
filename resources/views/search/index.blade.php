@@ -1,0 +1,4 @@
+@extends('clients.layout') @section('title','Búsqueda global') @section('content')
+<x-page-header title="Búsqueda global" :description="$term?'Resultados para “'.$term.'”':'Busca clientes, créditos, solicitudes o colaboradores.'" :eyebrow="$brand['system_name'] ?? 'Centro Financiero 360'" />
+<section class="card overflow-hidden"><div class="divide-y divide-slate-100">@forelse($results as $result)<a href="{{$result['url']}}" class="flex items-center gap-4 p-4 transition hover:bg-indigo-50/40"><span class="badge bg-indigo-50 text-indigo-700">{{$result['type']}}</span><div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold">{{$result['title']}}</p><p class="text-[11px] text-slate-400">{{$result['meta']}}</p></div><i data-lucide="arrow-up-right" class="icon text-slate-400"></i></a>@empty<x-empty-state title="Sin resultados" description="Escribe al menos dos caracteres o intenta con otro dato." icon="search" />@endforelse</div></section>
+@endsection

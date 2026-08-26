@@ -1,0 +1,2 @@
+@props(['title' => 'Sin información', 'description' => null, 'icon' => 'inbox'])
+<div {{$attributes->class(['empty-state'])}}><span class="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-slate-100 text-slate-400"><i data-lucide="{{$icon}}" class="icon"></i></span><p class="mt-3 font-semibold text-slate-600">{{$title}}</p>@if($description)<p class="mx-auto mt-1 max-w-sm leading-5">{{$description}}</p>@endif{{$slot}}</div>
