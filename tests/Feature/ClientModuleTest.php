@@ -143,6 +143,12 @@ class ClientModuleTest extends TestCase
         $this->actingAs($admin)->post(route('clients.transfer', $client), ['seller_id' => $second->id, 'reason' => 'Redistribución territorial'])->assertSessionHasNoErrors();
         $this->assertCount(2, $client->fresh()->portfolioAssignments);
         $this->assertSame($second->id, $client->fresh()->activeAssignment->seller_id);
+        $this->assertSame($first->id, $client->fresh()->activeAssignment->previous_seller_id);
+        $this->assertSame($admin->id, $client->fresh()->activeAssignment->assigned_by);
+        $this->get(route('clients.show', $client))->assertOk()
+            ->assertSee('Primero')
+            ->assertSee('Segundo')
+            ->assertSee('Redistribución territorial');
     }
 
     public function test_identity_control_letter_and_birth_date_must_be_valid(): void

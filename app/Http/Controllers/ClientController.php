@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ClientRequest;
+use App\Http\Requests\TransferClientRequest;
 use App\Models\Client;
 use App\Models\SellerProfile;
 use App\Services\ClientService;
@@ -72,10 +73,10 @@ class ClientController extends Controller
 
     public function show(Client $client)
     {
-        $client->load(['activeAssignment.seller.user', 'portfolioAssignments.seller.user', 'portfolioAssignments.assignedBy', 'assets', 'creditApplications.product', 'creditApplications.disbursement.disbursedBy', 'loans.installments.paymentAllocations.payment.reversal', 'loans.activeDelinquencyCase', 'loans.collectionRecords.recordedBy', 'usedGuarantees.guarantor', 'usedGuarantees.loan', 'collectionRecords.collector.user', 'collectionRecords.recordedBy']);
+        $client->load(['activeAssignment.seller.user', 'portfolioAssignments.seller.user', 'portfolioAssignments.previousSeller.user', 'portfolioAssignments.assignedBy', 'assets', 'creditApplications.product', 'creditApplications.disbursement.disbursedBy', 'loans.installments.paymentAllocations.payment.reversal', 'loans.activeDelinquencyCase', 'loans.collectionRecords.recordedBy', 'usedGuarantees.guarantor', 'usedGuarantees.loan', 'collectionRecords.collector.user', 'collectionRecords.recordedBy']);
 
         $timeline = collect([['type' => 'client', 'date' => $client->created_at, 'title' => 'Cliente registrado', 'description' => 'Se creó el expediente '.$client->code, 'url' => null]])
-            ->concat($client->portfolioAssignments->map(fn ($item) => ['type' => 'activity', 'date' => $item->assigned_at, 'title' => 'Asignación de cartera', 'description' => $item->seller->user->name.' · '.$item->reason, 'url' => null]))
+            ->concat($client->portfolioAssignments->map(fn ($item) => ['type' => 'activity', 'date' => $item->assigned_at, 'title' => $item->previousSeller ? 'Transferencia de gestor' : 'Asignación de cartera', 'description' => ($item->previousSeller ? $item->previousSeller->user->name.' → ' : '').$item->seller->user->name.' · '.$item->reason, 'url' => null]))
             ->concat($client->creditApplications->map(fn ($item) => ['type' => 'application', 'date' => $item->created_at, 'title' => 'Solicitud '.$item->number, 'description' => 'Estado: '.$item->status.' · '.$item->currency.' '.number_format((float) $item->requested_amount, 2), 'url' => route('applications.show', $item)]))
             ->concat($client->creditApplications->filter->disbursement->map(fn ($item) => ['type' => 'credit', 'date' => $item->disbursement->created_at, 'title' => 'Desembolso '.$item->disbursement->number, 'description' => $item->currency.' '.number_format((float) $item->disbursement->amount, 2), 'url' => route('loans.show', $item->loan)]))
             ->concat($client->collectionRecords->map(fn ($item) => ['type' => 'collection', 'date' => $item->recorded_at, 'title' => 'Gestión de cobranza', 'description' => ($item->amount ? 'C$ '.number_format((float) $item->amount, 2).' · ' : '').($item->notes ?: $item->outcome), 'url' => $item->loan_id ? route('loans.show', $item->loan_id) : null]))
@@ -106,9 +107,9 @@ class ClientController extends Controller
         return back()->with('success', 'Cliente inactivado sin eliminar su historial.');
     }
 
-    public function transfer(Request $request, Client $client)
+    public function transfer(TransferClientRequest $request, Client $client)
     {
-        $data = $request->validate(['seller_id' => ['required', 'exists:seller_profiles,id'], 'reason' => ['required', 'string', 'max:500']]);
+        $data = $request->validated();
         $this->clients->transfer($client, (int) $data['seller_id'], $data['reason']);
 
         return back()->with('success', 'Cartera transferida correctamente.');

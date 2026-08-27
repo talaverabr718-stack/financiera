@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ClientPortfolioAssignment extends Model
 {
-    protected $fillable = ['client_id', 'seller_id', 'assigned_at', 'ended_at', 'active_guard', 'reason', 'assigned_by'];
+    protected $fillable = ['client_id', 'seller_id', 'previous_seller_id', 'assigned_at', 'ended_at', 'active_guard', 'reason', 'assigned_by'];
 
     protected function casts(): array
     {
@@ -16,6 +16,11 @@ class ClientPortfolioAssignment extends Model
     public function seller()
     {
         return $this->belongsTo(SellerProfile::class);
+    }
+
+    public function previousSeller()
+    {
+        return $this->belongsTo(SellerProfile::class, 'previous_seller_id');
     }
 
     public function client()

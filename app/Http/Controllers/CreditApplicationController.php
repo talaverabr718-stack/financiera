@@ -9,8 +9,10 @@ use App\Models\CreditProduct;
 use App\Models\Guarantor;
 use App\Models\SellerProfile;
 use App\Services\CreditApplicationService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -59,7 +61,40 @@ class CreditApplicationController extends Controller
     {
         $application->load(['client', 'seller.user', 'product', 'decidedBy', 'loan', 'disbursement.disbursedBy', 'guarantees.guarantor', 'guarantees.latestEvaluation', 'guarantees.loan']);
 
-        return view('applications.show', compact('application'));
+        return Inertia::render('Applications/Show', [
+            'application' => [
+                ...$application->only(['id', 'number', 'status', 'requested_amount', 'approved_amount', 'currency', 'purpose', 'term', 'payment_frequency', 'interest_rate', 'interest_method', 'requires_guarantor', 'decision_reason']),
+                'client_name' => $application->client->full_name,
+                'product_name' => $application->product->name,
+                'seller_name' => $application->seller->user->name,
+                'proposed_first_payment_date' => $application->proposed_first_payment_date?->toDateString(),
+                'approved_at' => $application->approved_at?->toISOString(),
+                'estimated_last_payment_date' => $application->estimated_last_payment_date?->toDateString(),
+                'disbursement' => $application->disbursement?->only(['number', 'amount', 'disbursed_at']),
+                'disbursement_key' => (string) Str::uuid(),
+                'today' => today()->toDateString(),
+            ],
+            'guarantees' => $application->guarantees->map(fn ($guarantee) => [
+                'id' => $guarantee->id,
+                'name' => $guarantee->guarantor->full_name,
+                'relationship' => $guarantee->relationship,
+                'amount' => $guarantee->guaranteed_amount,
+                'status' => $guarantee->status,
+                'income' => $guarantee->latestEvaluation?->monthly_income,
+                'expenses' => $guarantee->latestEvaluation?->monthly_expenses,
+                'overdue' => (bool) $guarantee->latestEvaluation?->has_overdue_obligations,
+                'decision_url' => route('guarantees.decision', $guarantee),
+            ])->values(),
+            'statusLabels' => ['draft' => 'Borrador', 'submitted' => 'Enviada', 'review' => 'En revisión', 'approved' => 'Aprobada', 'rejected' => 'Rechazada', 'cancelled' => 'Cancelada', 'disbursed' => 'Desembolsada'],
+            'endpoints' => [
+                'index' => route('applications.index'),
+                'edit' => route('applications.edit', $application),
+                'status' => route('applications.status', $application),
+                'disburse' => route('applications.disburse', $application),
+                'loan' => $application->loan ? route('loans.show', $application->loan) : null,
+            ],
+            'csrf' => csrf_token(),
+        ]);
     }
 
     public function status(Request $request, CreditApplication $application)
@@ -75,9 +110,47 @@ class CreditApplicationController extends Controller
             throw ValidationException::withMessages(['status' => 'Todos los fiadores requeridos deben estar aprobados antes de aprobar la solicitud.']);
         }
         $decision = in_array($data['status'], ['approved', 'rejected'], true);
-        DB::transaction(fn () => CreditApplication::lockForUpdate()->findOrFail($application->id)->update($data + ['decided_by' => $decision ? auth()->id() : $application->decided_by, 'decided_at' => $decision ? now() : $application->decided_at]));
+        DB::transaction(function () use ($application, $data, $decision): void {
+            $locked = CreditApplication::lockForUpdate()->findOrFail($application->id);
+            $approval = $data['status'] === 'approved';
+            $approvedAt = $approval ? ($locked->approved_at ?? now()) : $locked->approved_at;
+            $lastPayment = $approval ? ($locked->estimated_last_payment_date ?? $this->estimateLastPaymentDate($locked, $approvedAt)) : $locked->estimated_last_payment_date;
+
+            $locked->update($data + [
+                'decided_by' => $decision ? auth()->id() : $locked->decided_by,
+                'decided_at' => $decision ? now() : $locked->decided_at,
+                'approved_at' => $approvedAt,
+                'estimated_last_payment_date' => $lastPayment,
+            ]);
+        });
+
+        if ($request->expectsJson()) {
+            $fresh = $application->fresh();
+
+            return response()->json([
+                'message' => 'Estado de la solicitud actualizado.',
+                'application' => [
+                    ...$fresh->only(['status', 'approved_amount', 'decision_reason']),
+                    'approved_at' => $fresh->approved_at?->toISOString(),
+                    'estimated_last_payment_date' => $fresh->estimated_last_payment_date?->toDateString(),
+                ],
+            ]);
+        }
 
         return back()->with('success', 'Estado de la solicitud actualizado.');
+    }
+
+    private function estimateLastPaymentDate(CreditApplication $application, Carbon $approvedAt): Carbon
+    {
+        $date = ($application->proposed_first_payment_date ?? $approvedAt)->copy()->startOfDay();
+        $remainingPayments = max(0, $application->term - ($application->proposed_first_payment_date ? 1 : 0));
+
+        return match ($application->payment_frequency) {
+            'daily' => $date->addDays($remainingPayments),
+            'weekly' => $date->addWeeks($remainingPayments),
+            'biweekly' => $date->addDays($remainingPayments * 14),
+            'monthly' => $date->addMonthsNoOverflow($remainingPayments),
+        };
     }
 
     private function form(CreditApplication $application)

@@ -10,6 +10,7 @@ use App\Models\User;
 use Database\Seeders\ClientModuleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class CreditApplicationModuleTest extends TestCase
@@ -32,6 +33,12 @@ class CreditApplicationModuleTest extends TestCase
         $this->assertSame('approved', $application->fresh()->status);
         $this->assertSame('9000.00', $application->fresh()->approved_amount);
         $this->assertNotNull($application->fresh()->decided_at);
+        $this->assertNotNull($application->fresh()->approved_at);
+        $this->assertSame($application->fresh()->approved_at->copy()->addWeeks(12)->toDateString(), $application->fresh()->estimated_last_payment_date->toDateString());
+        $this->get(route('applications.show', $application))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Applications/Show')
+            ->where('application.approved_amount', '9000.00')
+            ->where('application.estimated_last_payment_date', $application->fresh()->estimated_last_payment_date->toDateString()));
     }
 
     public function test_sequence_skips_numbers_that_already_exist(): void

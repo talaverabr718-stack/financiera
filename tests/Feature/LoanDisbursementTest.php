@@ -11,6 +11,7 @@ use App\Models\User;
 use Database\Seeders\ClientModuleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class LoanDisbursementTest extends TestCase
@@ -48,7 +49,7 @@ class LoanDisbursementTest extends TestCase
         $this->assertDatabaseCount('loan_disbursements', 1);
 
         $this->actingAs($user)->get(route('applications.show', $application))
-            ->assertOk()->assertSee('historial de la solicitud permanece protegido');
+            ->assertOk()->assertInertia(fn (Assert $page) => $page->component('Applications/Show')->where('application.status', 'disbursed'));
         $this->actingAs($user)->patch(route('applications.status', $application), ['status' => 'cancelled'])
             ->assertRedirect(route('applications.show', $application))->assertSessionHas('success');
         $this->assertSame('disbursed', $application->fresh()->status);
