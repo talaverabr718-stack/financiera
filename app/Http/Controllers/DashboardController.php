@@ -8,14 +8,15 @@ use App\Models\CollectionRoute;
 use App\Models\CreditApplication;
 use App\Models\Loan;
 use Illuminate\Support\Facades\Schema;
+use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
     public function __invoke()
     {
         if (! Schema::hasTable('loans')) {
-            return view('dashboard', [
-                'stats' => ['activePortfolio'=>0, 'placed'=>0, 'collectedToday'=>0, 'activeLoans'=>0, 'delinquentLoans'=>0, 'pendingApplications'=>0, 'clients'=>0, 'routesToday'=>0, 'delinquencyRate'=>0],
+            return Inertia::render('Dashboard/Index', [
+                'stats' => ['activePortfolio' => 0, 'placed' => 0, 'collectedToday' => 0, 'activeLoans' => 0, 'delinquentLoans' => 0, 'pendingApplications' => 0, 'clients' => 0, 'routesToday' => 0, 'delinquencyRate' => 0],
                 'recentApplications' => collect(),
                 'recentCollections' => collect(),
             ]);
@@ -35,6 +36,17 @@ class DashboardController extends Controller
         $recentApplications = CreditApplication::with(['client', 'product'])->latest()->take(5)->get();
         $recentCollections = CollectionRecord::with(['client', 'collector.user'])->latest('recorded_at')->take(6)->get();
 
-        return view('dashboard', compact('stats', 'recentApplications', 'recentCollections'));
+        return Inertia::render('Dashboard/Index', compact('stats', 'recentApplications', 'recentCollections') + [
+            'links' => [
+                'newApplication' => route('applications.create'),
+                'newClient' => route('clients.create'),
+                'applications' => route('applications.index'),
+                'clients' => route('clients.index'),
+                'loans' => route('loans.index'),
+                'routes' => route('routes.index'),
+                'collections' => route('collections.index'),
+            ],
+            'monthName' => now()->translatedFormat('F'),
+        ]);
     }
 }

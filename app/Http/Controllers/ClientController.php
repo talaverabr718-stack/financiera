@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\SellerProfile;
 use App\Services\ClientService;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class ClientController extends Controller
 {
@@ -25,7 +26,14 @@ class ClientController extends Controller
             : $clients->getCollection()->first();
         $selectedClient?->load(['assets', 'creditApplications', 'loans.installments', 'usedGuarantees.guarantor', 'collectionRecords']);
 
-        return view('clients.index', compact('clients', 'selectedClient') + ['sellers' => $this->sellers()]);
+        return Inertia::render('Clients/Index', compact('clients', 'selectedClient') + [
+            'sellers' => $this->sellers(),
+            'filters' => $request->only('search', 'status', 'seller'),
+            'endpoints' => [
+                'index' => route('clients.index'),
+                'create' => route('clients.create'),
+            ],
+        ]);
     }
 
     public function create()
@@ -65,11 +73,11 @@ class ClientController extends Controller
     {
         $client->load(['activeAssignment.seller.user', 'portfolioAssignments.seller.user', 'portfolioAssignments.assignedBy', 'assets', 'creditApplications.product', 'creditApplications.disbursement.disbursedBy', 'loans.installments', 'loans.collectionRecords.recordedBy', 'usedGuarantees.guarantor', 'usedGuarantees.loan', 'collectionRecords.collector.user', 'collectionRecords.recordedBy']);
 
-        $timeline = collect([['type'=>'client','date'=>$client->created_at,'title'=>'Cliente registrado','description'=>'Se creó el expediente '.$client->code,'url'=>null]])
-            ->concat($client->portfolioAssignments->map(fn($item)=>['type'=>'activity','date'=>$item->assigned_at,'title'=>'Asignación de cartera','description'=>$item->seller->user->name.' · '.$item->reason,'url'=>null]))
-            ->concat($client->creditApplications->map(fn($item)=>['type'=>'application','date'=>$item->created_at,'title'=>'Solicitud '.$item->number,'description'=>'Estado: '.$item->status.' · '.$item->currency.' '.number_format((float)$item->requested_amount,2),'url'=>route('applications.show',$item)]))
-            ->concat($client->creditApplications->filter->disbursement->map(fn($item)=>['type'=>'credit','date'=>$item->disbursement->created_at,'title'=>'Desembolso '.$item->disbursement->number,'description'=>$item->currency.' '.number_format((float)$item->disbursement->amount,2),'url'=>route('loans.show',$item->loan)]))
-            ->concat($client->collectionRecords->map(fn($item)=>['type'=>'collection','date'=>$item->recorded_at,'title'=>'Gestión de cobranza','description'=>($item->amount?'C$ '.number_format((float)$item->amount,2).' · ':'').($item->notes?:$item->outcome),'url'=>$item->loan_id?route('loans.show',$item->loan_id):null]))
+        $timeline = collect([['type' => 'client', 'date' => $client->created_at, 'title' => 'Cliente registrado', 'description' => 'Se creó el expediente '.$client->code, 'url' => null]])
+            ->concat($client->portfolioAssignments->map(fn ($item) => ['type' => 'activity', 'date' => $item->assigned_at, 'title' => 'Asignación de cartera', 'description' => $item->seller->user->name.' · '.$item->reason, 'url' => null]))
+            ->concat($client->creditApplications->map(fn ($item) => ['type' => 'application', 'date' => $item->created_at, 'title' => 'Solicitud '.$item->number, 'description' => 'Estado: '.$item->status.' · '.$item->currency.' '.number_format((float) $item->requested_amount, 2), 'url' => route('applications.show', $item)]))
+            ->concat($client->creditApplications->filter->disbursement->map(fn ($item) => ['type' => 'credit', 'date' => $item->disbursement->created_at, 'title' => 'Desembolso '.$item->disbursement->number, 'description' => $item->currency.' '.number_format((float) $item->disbursement->amount, 2), 'url' => route('loans.show', $item->loan)]))
+            ->concat($client->collectionRecords->map(fn ($item) => ['type' => 'collection', 'date' => $item->recorded_at, 'title' => 'Gestión de cobranza', 'description' => ($item->amount ? 'C$ '.number_format((float) $item->amount, 2).' · ' : '').($item->notes ?: $item->outcome), 'url' => $item->loan_id ? route('loans.show', $item->loan_id) : null]))
             ->sortByDesc('date')->values();
 
         return view('clients.show', compact('client', 'timeline'));
@@ -108,5 +116,4 @@ class ClientController extends Controller
     {
         return SellerProfile::with('user')->where('status', 'active')->whereJsonContains('capabilities', 'prospecting')->get();
     }
-
 }

@@ -95,5 +95,4 @@ class CollectionRouteController extends Controller
             'clients' => Client::with('activeAssignment')->where('status', 'active')->orderBy('full_name')->get(),
         ]);
     }
-
 }

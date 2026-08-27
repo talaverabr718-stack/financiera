@@ -13,5 +13,8 @@ class GuarantorEvaluation extends Model
         return ['monthly_income' => 'decimal:2', 'other_income' => 'decimal:2', 'monthly_expenses' => 'decimal:2', 'assets_snapshot' => 'array', 'has_overdue_obligations' => 'boolean', 'evaluated_at' => 'datetime'];
     }
 
-    public function guarantee() { return $this->belongsTo(CreditGuarantor::class, 'credit_guarantor_id'); }
+    public function guarantee()
+    {
+        return $this->belongsTo(CreditGuarantor::class, 'credit_guarantor_id');
+    }
 }

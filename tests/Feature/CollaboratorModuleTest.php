@@ -17,6 +17,7 @@ class CollaboratorModuleTest extends TestCase
     {
         $branch = Branch::create(['code' => 'EST-01', 'name' => 'Central']);
         $zone = Zone::create(['branch_id' => $branch->id, 'code' => 'EST-CEN', 'name' => 'Centro']);
+
         return [$branch, $zone];
     }
 

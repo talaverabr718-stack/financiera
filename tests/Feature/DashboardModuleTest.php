@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Loan;
 use Database\Seeders\ClientModuleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class DashboardModuleTest extends TestCase
@@ -16,9 +17,11 @@ class DashboardModuleTest extends TestCase
         $this->seed(ClientModuleSeeder::class);
         Loan::orderBy('id')->firstOrFail()->update(['principal' => 12345, 'disbursed_at' => today()]);
 
-        $this->get(route('dashboard'))->assertOk()
-            ->assertSee('Crédito vigente otorgado a los clientes')
-            ->assertSee('Total de préstamos desembolsados en '.now()->translatedFormat('F'))
-            ->assertSee('C$ 12,345.00');
+        $this->get(route('dashboard'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Dashboard/Index')
+            ->where('stats.placed', 12345)
+            ->where('monthName', now()->translatedFormat('F'))
+            ->has('navigation', 4)
+        );
     }
 }

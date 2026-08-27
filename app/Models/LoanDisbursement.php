@@ -13,7 +13,18 @@ class LoanDisbursement extends Model
         return ['amount' => 'decimal:2', 'disbursed_at' => 'date'];
     }
 
-    public function application() { return $this->belongsTo(CreditApplication::class, 'credit_application_id'); }
-    public function loan() { return $this->belongsTo(Loan::class); }
-    public function disbursedBy() { return $this->belongsTo(User::class, 'disbursed_by'); }
+    public function application()
+    {
+        return $this->belongsTo(CreditApplication::class, 'credit_application_id');
+    }
+
+    public function loan()
+    {
+        return $this->belongsTo(Loan::class);
+    }
+
+    public function disbursedBy()
+    {
+        return $this->belongsTo(User::class, 'disbursed_by');
+    }
 }

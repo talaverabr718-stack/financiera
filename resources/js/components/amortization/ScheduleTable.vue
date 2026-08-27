@@ -1,0 +1,8 @@
+<script setup>
+defineProps({ rows: Array, page: Number, pages: Number, currency: Function, date: Function });
+defineEmits(['select', 'page']);
+</script>
+<template>
+    <div class="table-wrap max-h-[58vh]"><table class="w-full text-right"><thead class="text-[9px] uppercase text-slate-400"><tr><th class="table-cell text-left">#</th><th class="table-cell text-left">Fecha</th><th class="table-cell">Saldo inicial</th><th class="table-cell">Capital</th><th class="table-cell">Interés</th><th class="table-cell">Cuota</th><th class="table-cell">Saldo final</th></tr></thead><tbody class="divide-y"><tr v-for="row in rows" :key="row.number" class="cursor-pointer" @click="$emit('select', row)"><td class="table-cell text-left font-bold">{{ row.number }}</td><td class="table-cell text-left text-slate-500">{{ date(row.date) }}</td><td class="table-cell">{{ currency(row.opening_balance) }}</td><td class="table-cell">{{ currency(row.principal) }}</td><td class="table-cell text-amber-700">{{ currency(row.interest) }}</td><td class="table-cell font-bold text-indigo-700">{{ currency(row.payment) }}</td><td class="table-cell">{{ currency(row.closing_balance) }}</td></tr><tr v-if="!rows.length"><td colspan="7" class="p-10 text-center text-xs text-slate-400">No hay cuotas que coincidan con los filtros.</td></tr></tbody></table></div>
+    <footer v-if="pages > 1" class="flex items-center justify-between border-t p-3 text-xs"><button class="btn-secondary" :disabled="page === 1" @click="$emit('page', page - 1)">Anterior</button><span class="text-slate-500">Página {{ page }} de {{ pages }}</span><button class="btn-secondary" :disabled="page === pages" @click="$emit('page', page + 1)">Siguiente</button></footer>
+</template>

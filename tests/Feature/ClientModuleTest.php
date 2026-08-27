@@ -8,6 +8,7 @@ use App\Models\SellerProfile;
 use App\Models\User;
 use App\Models\Zone;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class ClientModuleTest extends TestCase
@@ -67,7 +68,7 @@ class ClientModuleTest extends TestCase
 
         $this->get(route('clients.create'))->assertOk()
             ->assertSee('fillBirthDateFromIdentity', false)
-            ->assertSee("digits.slice(3,9)", false)
+            ->assertSee('digits.slice(3,9)', false)
             ->assertSee('id="birth-date"', false);
     }
 
@@ -77,9 +78,9 @@ class ClientModuleTest extends TestCase
 
         $this->get(route('clients.create'))->assertOk()
             ->assertSee('formatIdentityNumber', false)
-            ->assertSee("digits.slice(0,3)", false)
-            ->assertSee("digits.slice(3,9)", false)
-            ->assertSee("digits.slice(9,13)", false);
+            ->assertSee('digits.slice(0,3)', false)
+            ->assertSee('digits.slice(3,9)', false)
+            ->assertSee('digits.slice(9,13)', false);
     }
 
     public function test_identity_mask_allows_deleting_across_separators(): void
@@ -106,7 +107,7 @@ class ClientModuleTest extends TestCase
     public function test_create_form_has_a_review_modal_before_visual_submission(): void
     {
         $this->seller();
-        $this->get(route('clients.create'))->assertOk()->assertSee('client-review-modal',false)->assertSee('Revisar y registrar')->assertSee('Confirmar y guardar');
+        $this->get(route('clients.create'))->assertOk()->assertSee('client-review-modal', false)->assertSee('Revisar y registrar')->assertSee('Confirmar y guardar');
     }
 
     public function test_client_can_be_created_with_automatic_code_and_portfolio_assignment(): void
@@ -181,7 +182,11 @@ class ClientModuleTest extends TestCase
 
     public function test_client_directory_exposes_intuitive_modal_workflows(): void
     {
-        $this->get(route('clients.index'))->assertOk()->assertSee('client-modal',false)->assertSee('filter-modal',false)->assertSee('new-client-modal',false)->assertSee('client-quick-search',false)->assertSee('Directorio de clientes');
+        $this->get(route('clients.index'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Clients/Index')
+            ->has('clients.data')
+            ->has('filters')
+            ->where('endpoints.create', route('clients.create')));
     }
 
     public function test_client_directory_supports_quick_search_and_optional_seller_filter(): void
@@ -193,8 +198,10 @@ class ClientModuleTest extends TestCase
 
         $this->get(route('clients.index', ['search' => 'María', 'seller' => $first->id]))
             ->assertOk()
-            ->assertSee('María Encontrada')
-            ->assertDontSee('Carlos Oculto')
-            ->assertSee('Vendedor Buscado');
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Clients/Index')
+                ->has('clients.data', 1)
+                ->where('clients.data.0.full_name', 'María Encontrada')
+                ->where('clients.data.0.active_assignment.seller.user.name', 'Vendedor Buscado'));
     }
 }

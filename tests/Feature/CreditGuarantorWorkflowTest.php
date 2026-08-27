@@ -89,7 +89,7 @@ class CreditGuarantorWorkflowTest extends TestCase
         $guarantee = CreditGuarantor::firstOrFail();
 
         auth()->logout();
-        $this->patch(route('guarantees.decision', $guarantee), ['status' => 'approved', 'decision_reason' => 'Capacidad suficiente'])->assertForbidden();
+        $this->patch(route('guarantees.decision', $guarantee), ['status' => 'approved', 'decision_reason' => 'Capacidad suficiente'])->assertRedirect(route('login'));
         $this->actingAs($user)->patch(route('applications.status', $application), ['status' => 'approved', 'approved_amount' => '9000.00'])->assertSessionHasErrors('status');
         $this->actingAs($user)->patch(route('guarantees.decision', $guarantee), ['status' => 'approved', 'decision_reason' => 'Capacidad suficiente'])->assertSessionHasNoErrors();
         $this->actingAs($user)->patch(route('applications.status', $application), ['status' => 'approved', 'approved_amount' => '9000.00'])->assertSessionHasNoErrors();

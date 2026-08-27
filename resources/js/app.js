@@ -1,5 +1,36 @@
 import './bootstrap';
 import './searchable-combobox';
+import { createApp } from 'vue';
+import { createInertiaApp } from '@inertiajs/vue3';
+import AppSidebar from './components/navigation/AppSidebar.vue';
+
+const inertiaPages = import.meta.glob('./Pages/**/*.vue');
+if (document.querySelector('script[data-page="app"]') && document.getElementById('app')) {
+    createInertiaApp({
+        resolve: name => inertiaPages[`./Pages/${name}.vue`](),
+        setup({ el, App, props, plugin }) {
+            createApp(App, props).use(plugin).mount(el);
+        },
+        progress: { color: '#6366f1' },
+    });
+}
+
+const legacySidebar = document.getElementById('legacy-vue-sidebar');
+if (legacySidebar) {
+    createApp(AppSidebar, {
+        open: false,
+        navigation: JSON.parse(legacySidebar.dataset.navigation || '[]'),
+        user: JSON.parse(legacySidebar.dataset.user || '{}'),
+        routes: JSON.parse(legacySidebar.dataset.routes || '{}'),
+        currentUrl: legacySidebar.dataset.currentUrl,
+        csrf: legacySidebar.dataset.csrf,
+        inertiaEnabled: false,
+        onClose: () => {
+            document.getElementById('sidebar')?.classList.add('-translate-x-full');
+            document.getElementById('overlay')?.classList.add('hidden');
+        },
+    }).mount(legacySidebar);
+}
 import {
     ArrowLeft, ArrowLeftRight, ArrowUpRight, Banknote, Bell, BookOpen, Briefcase, BriefcaseBusiness, Building2, Calendar, CalendarDays, ChartNoAxesCombined, CircleCheck, Download, EllipsisVertical,
     FileCheck2, HandCoins, Landmark, LayoutDashboard, Map, MapPinCheck,
@@ -23,13 +54,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('sidebar-close')?.addEventListener('click', closeDrawer);
     overlay?.addEventListener('click', closeDrawer);
     document.addEventListener('keydown', event => { if (event.key === 'Escape') closeDrawer(); });
-    const collapsed = localStorage.getItem('sidebar-collapsed') === 'true';
-    document.body.classList.toggle('sidebar-collapsed', collapsed);
-    document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
-        const next = !document.body.classList.contains('sidebar-collapsed');
-        document.body.classList.toggle('sidebar-collapsed', next);
-        localStorage.setItem('sidebar-collapsed', String(next));
-    });
+    document.body.classList.remove('sidebar-collapsed');
+    localStorage.removeItem('sidebar-collapsed');
     document.querySelectorAll('form').forEach(form => form.addEventListener('submit', () => {
         const button = form.querySelector('button[type="submit"], button:not([type])');
         if (!button || button.dataset.allowRepeat === 'true') return;

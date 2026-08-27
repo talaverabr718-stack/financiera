@@ -19,6 +19,7 @@ class LoanDisbursementService
                 if ($existing->credit_application_id !== $application->id) {
                     throw ValidationException::withMessages(['idempotency_key' => 'La clave de operación ya fue utilizada en otro desembolso.']);
                 }
+
                 return $existing;
             }
 

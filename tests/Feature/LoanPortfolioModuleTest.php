@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Loan;
 use Database\Seeders\ClientModuleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class LoanPortfolioModuleTest extends TestCase
@@ -15,8 +16,11 @@ class LoanPortfolioModuleTest extends TestCase
     {
         $this->seed(ClientModuleSeeder::class);
         $loan = Loan::firstOrFail();
-        $this->get(route('loans.index'))->assertOk()
-            ->assertSee($loan->number)->assertSee($loan->client->full_name)->assertSee('Saldo pendiente');
+        $this->get(route('loans.index'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Loans/Index')
+            ->where('loans.data.0.number', $loan->number)
+            ->where('loans.data.0.client.full_name', $loan->client->full_name)
+            ->has('summary.outstanding'));
     }
 
     public function test_portfolio_filters_by_status_and_search(): void

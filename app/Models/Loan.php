@@ -6,11 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class Loan extends Model
 {
-    protected $fillable = ['number', 'credit_application_id', 'client_id', 'seller_id', 'status', 'currency', 'principal', 'principal_balance', 'interest_balance', 'fee_balance', 'approved_terms', 'disbursed_at'];
+    protected $fillable = ['number', 'credit_application_id', 'restructured_from_id', 'client_id', 'seller_id', 'status', 'currency', 'principal', 'principal_balance', 'interest_balance', 'fee_balance', 'delinquency_balance', 'approved_terms', 'disbursed_at', 'maturity_date', 'closed_at'];
 
     protected function casts(): array
     {
-        return ['principal' => 'decimal:2', 'principal_balance' => 'decimal:2', 'interest_balance' => 'decimal:2', 'fee_balance' => 'decimal:2', 'approved_terms' => 'array', 'disbursed_at' => 'date'];
+        return ['principal' => 'decimal:2', 'principal_balance' => 'decimal:2', 'interest_balance' => 'decimal:2', 'fee_balance' => 'decimal:2', 'delinquency_balance' => 'decimal:2', 'approved_terms' => 'array', 'disbursed_at' => 'date', 'maturity_date' => 'date', 'closed_at' => 'datetime'];
     }
 
     public function client()
@@ -38,6 +38,26 @@ class Loan extends Model
         return $this->hasMany(LoanInstallment::class)->orderBy('number');
     }
 
+    public function delinquencyAccruals()
+    {
+        return $this->hasMany(DelinquencyAccrual::class);
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function restructuredFrom()
+    {
+        return $this->belongsTo(self::class, 'restructured_from_id');
+    }
+
+    public function restructurings()
+    {
+        return $this->hasMany(self::class, 'restructured_from_id');
+    }
+
     public function disbursement()
     {
         return $this->hasOne(LoanDisbursement::class);
@@ -59,6 +79,9 @@ class Loan extends Model
 
     public function getOutstandingBalanceAttribute(): string
     {
-        return bcadd(bcadd((string) $this->principal_balance, (string) $this->interest_balance, 2), (string) $this->fee_balance, 2);
+        $nonPrincipal = bcadd((string) $this->interest_balance, (string) $this->fee_balance, 2);
+        $nonPrincipal = bcadd($nonPrincipal, (string) $this->delinquency_balance, 2);
+
+        return bcadd((string) $this->principal_balance, $nonPrincipal, 2);
     }
 }

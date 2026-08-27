@@ -1,0 +1,13 @@
+[program:financiera-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/financiera/current/artisan queue:work database --sleep=3 --tries=3 --timeout=90 --max-time=3600
+directory=/var/www/financiera/current
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user=www-data
+numprocs=2
+redirect_stderr=true
+stdout_logfile=/var/www/financiera/current/storage/logs/worker.log
+stopwaitsecs=3600

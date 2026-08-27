@@ -40,7 +40,9 @@ class CreditApplicationService
     private function recordGuarantees(CreditApplication $application, array $rows): void
     {
         foreach ($rows as $row) {
-            if (empty($row['guarantor_id']) && empty($row['full_name'])) continue;
+            if (empty($row['guarantor_id']) && empty($row['full_name'])) {
+                continue;
+            }
             $guarantor = ! empty($row['guarantor_id'])
                 ? Guarantor::lockForUpdate()->findOrFail($row['guarantor_id'])
                 : Guarantor::create(Arr::only($row, ['full_name', 'identity_number', 'phone', 'email', 'address']));
@@ -66,18 +68,23 @@ class CreditApplicationService
 
     private function storeDocument($guarantee, mixed $file, string $type): void
     {
-        if (! $file instanceof UploadedFile) return;
+        if (! $file instanceof UploadedFile) {
+            return;
+        }
         $path = $file->store('guarantor-documents');
         $document = $guarantee->documents()->create([
             'guarantor_id' => $guarantee->guarantor_id, 'type' => $type, 'original_name' => $file->getClientOriginalName(),
             'path' => $path, 'mime_type' => $file->getMimeType(), 'size' => $file->getSize(), 'uploaded_by' => auth()->id(),
         ]);
-        if ($type === 'signed_guarantee') $guarantee->update(['signed_document_path' => $document->path]);
+        if ($type === 'signed_guarantee') {
+            $guarantee->update(['signed_document_path' => $document->path]);
+        }
     }
 
     private function clientSnapshot(int $clientId): array
     {
         $client = Client::findOrFail($clientId);
+
         return ['income' => $client->estimated_income, 'expenses' => $client->estimated_expenses, 'activity' => $client->economic_activity, 'captured_at' => now()->toIso8601String()];
     }
 }

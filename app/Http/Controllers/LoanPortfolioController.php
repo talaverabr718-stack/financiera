@@ -7,6 +7,7 @@ use App\Models\SellerProfile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 
 class LoanPortfolioController extends Controller
 {
@@ -26,19 +27,27 @@ class LoanPortfolioController extends Controller
             ->latest('disbursed_at')->paginate(15)->withQueryString();
         $sellers = SellerProfile::with('user')->where('status', 'active')
             ->whereHas('portfolioAssignments', fn ($q) => $q->whereNull('ended_at'))->orderBy('code')->get();
-        return view('loans.index', compact('loans', 'summary', 'sellers'));
+
+        return Inertia::render('Loans/Index', [
+            'loans' => $loans,
+            'summary' => $summary,
+            'sellers' => $sellers,
+            'filters' => $request->only('search', 'status', 'seller'),
+            'endpoints' => ['index' => route('loans.index')],
+        ]);
     }
 
     public function show(Loan $loan)
     {
         $loan->load(['client.activeAssignment.seller.user', 'seller.user', 'application.product', 'disbursement.disbursedBy', 'installments', 'collectionRecords.collector.user', 'collectionRecords.recordedBy', 'guarantees.guarantor']);
         $timeline = collect([
-            ['date'=>$loan->application->created_at,'type'=>'Solicitud','title'=>$loan->application->number,'description'=>'Solicitud registrada'],
-            ['date'=>$loan->application->decided_at,'type'=>'Aprobación','title'=>'Crédito aprobado','description'=>$loan->currency.' '.number_format((float)$loan->principal,2)],
-            ['date'=>$loan->disbursement?->created_at??$loan->disbursed_at,'type'=>'Desembolso','title'=>$loan->disbursement?->number??'Desembolso','description'=>$loan->disbursement?->payment_method??'Préstamo activado'],
-        ])->concat($loan->installments->map(fn($item)=>['date'=>$item->due_date,'type'=>'Cuota','title'=>'Cuota '.$item->number,'description'=>'Estado: '.$item->status]))
-          ->concat($loan->collectionRecords->map(fn($item)=>['date'=>$item->recorded_at,'type'=>'Cobranza','title'=>$item->outcome,'description'=>($item->amount?$loan->currency.' '.number_format((float)$item->amount,2).' · ':'').($item->notes?:'Gestión registrada')]))
-          ->filter(fn($item)=>$item['date'])->sortByDesc('date')->values();
+            ['date' => $loan->application->created_at, 'type' => 'Solicitud', 'title' => $loan->application->number, 'description' => 'Solicitud registrada'],
+            ['date' => $loan->application->decided_at, 'type' => 'Aprobación', 'title' => 'Crédito aprobado', 'description' => $loan->currency.' '.number_format((float) $loan->principal, 2)],
+            ['date' => $loan->disbursement?->created_at ?? $loan->disbursed_at, 'type' => 'Desembolso', 'title' => $loan->disbursement?->number ?? 'Desembolso', 'description' => $loan->disbursement?->payment_method ?? 'Préstamo activado'],
+        ])->concat($loan->installments->map(fn ($item) => ['date' => $item->due_date, 'type' => 'Cuota', 'title' => 'Cuota '.$item->number, 'description' => 'Estado: '.$item->status]))
+            ->concat($loan->collectionRecords->map(fn ($item) => ['date' => $item->recorded_at, 'type' => 'Cobranza', 'title' => $item->outcome, 'description' => ($item->amount ? $loan->currency.' '.number_format((float) $item->amount, 2).' · ' : '').($item->notes ?: 'Gestión registrada')]))
+            ->filter(fn ($item) => $item['date'])->sortByDesc('date')->values();
+
         return view('loans.show', compact('loan', 'timeline'));
     }
 

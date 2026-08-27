@@ -29,13 +29,15 @@ return new class extends Migration
         });
 
         $modules = [
-            ['dashboard','Panel general','Indicadores y resumen de la operación'], ['clients','Clientes','Expedientes y asignación de cartera'],
-            ['applications','Solicitudes','Solicitudes y productos crediticios'], ['loans','Cartera','Préstamos y saldos'],
-            ['routes','Rutas','Planificación y clientes por ruta'], ['collections','Cobranza','Cobros, promesas y visitas'],
-            ['cash','Caja','Operaciones de caja'], ['collaborators','Colaboradores','Personal de campo y capacidades'],
-            ['accounting','Contabilidad','Catálogo, asientos y libros'], ['reports','Reportes','Reportería operativa y financiera'],
+            ['dashboard', 'Panel general', 'Indicadores y resumen de la operación'], ['clients', 'Clientes', 'Expedientes y asignación de cartera'],
+            ['applications', 'Solicitudes', 'Solicitudes y productos crediticios'], ['loans', 'Cartera', 'Préstamos y saldos'],
+            ['routes', 'Rutas', 'Planificación y clientes por ruta'], ['collections', 'Cobranza', 'Cobros, promesas y visitas'],
+            ['cash', 'Caja', 'Operaciones de caja'], ['collaborators', 'Colaboradores', 'Personal de campo y capacidades'],
+            ['accounting', 'Contabilidad', 'Catálogo, asientos y libros'], ['reports', 'Reportes', 'Reportería operativa y financiera'],
         ];
-        foreach ($modules as $order => [$key,$name,$description]) DB::table('system_modules')->insert(['key'=>$key,'name'=>$name,'description'=>$description,'sort_order'=>$order,'created_at'=>now(),'updated_at'=>now()]);
+        foreach ($modules as $order => [$key,$name,$description]) {
+            DB::table('system_modules')->insert(['key' => $key, 'name' => $name, 'description' => $description, 'sort_order' => $order, 'created_at' => now(), 'updated_at' => now()]);
+        }
     }
 
     public function down(): void

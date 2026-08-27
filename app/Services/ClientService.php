@@ -52,7 +52,7 @@ class ClientService
 
     private function assignSeller(Client $client, int $sellerId, string $reason): void
     {
-        ClientPortfolioAssignment::create(['client_id' => $client->id, 'seller_id' => $sellerId, 'assigned_at' => now(), 'active_guard' => 'ACTIVE', 'reason' => $reason, 'assigned_by' => auth()->id() ?? 1]);
+        ClientPortfolioAssignment::create(['client_id' => $client->id, 'seller_id' => $sellerId, 'assigned_at' => now(), 'active_guard' => 'ACTIVE', 'reason' => $reason, 'assigned_by' => auth()->id()]);
     }
 
     private function guardPhoneDuplicate(array $data, ?Client $client = null): void

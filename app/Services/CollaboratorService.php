@@ -13,6 +13,7 @@ class CollaboratorService
     {
         return DB::transaction(function () use ($data) {
             $user = User::create(Arr::only($data, ['name', 'email', 'password']));
+
             return SellerProfile::create(Arr::only($data, ['branch_id', 'zone_id', 'code', 'identity_number', 'phone', 'hired_at', 'capabilities', 'notes', 'status']) + ['user_id' => $user->id]);
         });
     }
@@ -23,9 +24,12 @@ class CollaboratorService
             $locked = SellerProfile::lockForUpdate()->findOrFail($collaborator->id);
             $user = User::lockForUpdate()->findOrFail($locked->user_id);
             $userData = Arr::only($data, ['name', 'email']);
-            if (! empty($data['password'])) $userData['password'] = $data['password'];
+            if (! empty($data['password'])) {
+                $userData['password'] = $data['password'];
+            }
             $user->update($userData);
             $locked->update(Arr::only($data, ['branch_id', 'zone_id', 'code', 'identity_number', 'phone', 'hired_at', 'capabilities', 'notes', 'status']));
+
             return $locked->fresh(['user', 'branch', 'zone']);
         });
     }

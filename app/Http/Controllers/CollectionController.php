@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\CollectionRecord;
 use App\Models\CollectionRoute;
 use App\Models\CollectionRouteStop;
-use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -63,7 +62,7 @@ class CollectionController extends Controller
                 'collector_id' => $stop->route->collector_id,
                 'application_status' => $data['outcome'] === 'collected' ? 'pending' : 'not_applicable',
                 'recorded_at' => now(),
-                'recorded_by' => auth()->id() ?? User::query()->value('id'),
+                'recorded_by' => auth()->id(),
             ]);
 
             $stop->update([
@@ -87,5 +86,4 @@ class CollectionController extends Controller
 
         return back()->with('success', 'Gestión de cobranza registrada y ruta actualizada.');
     }
-
 }

@@ -27,6 +27,33 @@
     input, select { min-height: 2.5rem; }
     textarea { min-height: 4.75rem; }
     input, select, textarea { @apply disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500; }
+    img, svg, video, canvas { max-width: 100%; }
+}
+
+/* Estructura única para páginas Inertia y vistas pendientes de migración. */
+.app-shell { width: 100%; min-width: 0; overflow-x: clip; transition: margin-left .3s ease, width .3s ease; }
+#legacy-vue-sidebar { position: relative; z-index: 50; }
+
+@media (min-width: 64rem) {
+    #legacy-vue-sidebar + .app-shell {
+        width: calc(100% - 16rem);
+        margin-left: 16rem;
+    }
+}
+
+@media (max-width: 63.999rem) {
+    #legacy-vue-sidebar + .app-shell { width: 100%; margin-left: 0; }
+}
+
+main, main > *, .card, .table-wrap { min-width: 0; }
+.table-wrap { max-width: 100%; overscroll-behavior-inline: contain; }
+.table-wrap table { min-width: max-content; }
+.modal-panel { max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); overflow-y: auto; }
+
+@media (max-width: 40rem) {
+    .page-title { font-size: 1.25rem; line-height: 1.65rem; }
+    .card { max-width: 100%; }
+    .table-cell { padding-inline: .75rem; }
 }
 
 @layer components {
@@ -133,10 +160,10 @@
         height: 100vh;
     }
 
-    #sidebar { width: 17rem; }
+    #sidebar { width: 16rem; }
     #sidebar + .app-shell {
-        margin-left: 17rem;
-        width: calc(100% - 17rem);
+        margin-left: 16rem;
+        width: calc(100% - 16rem);
         transition: margin-left .2s ease, width .2s ease;
     }
     body.sidebar-collapsed #sidebar { width: 5.5rem; }
@@ -149,7 +176,7 @@
     body.sidebar-collapsed #sidebar .nav-link-active::before { display: none; }
 }
 
-#sidebar > div:first-child { min-height: 5rem; height: 5rem; padding-inline: 1rem; }
+#sidebar > div:first-child { min-height: 4.25rem; height: 4.25rem; padding-inline: 1rem; }
 #sidebar > div:first-child img, #sidebar > div:first-child > .bg-gradient-to-br { width: 3rem; height: 3rem; border-radius: 9999px; }
 #sidebar .sidebar-brand-copy p:first-child { font-size: .9375rem; line-height: 1.25rem; font-weight: 700; }
 #sidebar .sidebar-brand-copy p:last-child { margin-top: .15rem; font-size: .6875rem; }
@@ -484,8 +511,8 @@ main form:not(#client-form) > div:last-child:has(> button[type='submit']) > .btn
 }
 
 @media print {
-    #sidebar, .app-topbar, #overlay { display: none !important; }
-    #sidebar + .app-shell { margin-left: 0 !important; width: 100% !important; }
+    #sidebar, #legacy-vue-sidebar, .app-topbar, #overlay { display: none !important; }
+    #sidebar + .app-shell, #legacy-vue-sidebar + .app-shell { margin-left: 0 !important; width: 100% !important; }
     body { background: white; }
     .card { box-shadow: none; }
     .metric { border-width: 1px; background: white !important; box-shadow: none; color: #0f172a; transform: none !important; }

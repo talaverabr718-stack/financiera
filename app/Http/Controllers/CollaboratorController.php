@@ -24,34 +24,45 @@ class CollaboratorController extends Controller
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
             ->when($request->filled('capability'), fn ($q) => $q->whereJsonContains('capabilities', $request->capability))
             ->orderByDesc('status')->latest()->paginate(15)->withQueryString();
+
         return view('collaborators.index', compact('collaborators'));
     }
 
-    public function create() { return $this->form(new SellerProfile); }
+    public function create()
+    {
+        return $this->form(new SellerProfile);
+    }
 
     public function store(CollaboratorRequest $request)
     {
         $collaborator = $this->collaborators->create($request->validated());
+
         return redirect()->route('collaborators.show', $collaborator)->with('success', 'Colaborador registrado correctamente.');
     }
 
     public function show(SellerProfile $collaborator)
     {
         $collaborator->load(['user', 'branch', 'zone', 'portfolioAssignments.client', 'collectionRoutes' => fn ($q) => $q->latest('scheduled_date')->limit(10)]);
+
         return view('collaborators.show', compact('collaborator'));
     }
 
-    public function edit(SellerProfile $collaborator) { return $this->form($collaborator->load('user')); }
+    public function edit(SellerProfile $collaborator)
+    {
+        return $this->form($collaborator->load('user'));
+    }
 
     public function update(CollaboratorRequest $request, SellerProfile $collaborator)
     {
         $this->collaborators->update($collaborator, $request->validated());
+
         return redirect()->route('collaborators.show', $collaborator)->with('success', 'Colaborador actualizado.');
     }
 
     public function destroy(SellerProfile $collaborator)
     {
         $this->collaborators->inactivate($collaborator);
+
         return back()->with('success', 'Colaborador inactivado sin eliminar su historial.');
     }
 

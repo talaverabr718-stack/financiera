@@ -3,16 +3,21 @@
 namespace App\Http\Requests;
 
 use App\Models\SellerProfile;
+use App\Models\Zone;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class CollaboratorRequest extends FormRequest
 {
-    public function authorize(): bool { return true; }
+    public function authorize(): bool
+    {
+        return true;
+    }
 
     public function rules(): array
     {
         $collaborator = $this->route('collaborator');
+
         return [
             'name' => ['required', 'string', 'max:180'],
             'email' => ['required', 'email', 'max:180', Rule::unique('users')->ignore($collaborator?->user_id)],
@@ -32,7 +37,7 @@ class CollaboratorRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator): void {
-            if ($this->zone_id && ! \App\Models\Zone::whereKey($this->zone_id)->where('branch_id', $this->branch_id)->exists()) {
+            if ($this->zone_id && ! Zone::whereKey($this->zone_id)->where('branch_id', $this->branch_id)->exists()) {
                 $validator->errors()->add('zone_id', 'La zona seleccionada no pertenece a la sucursal.');
             }
         });
