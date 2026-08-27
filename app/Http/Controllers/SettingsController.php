@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Services\SystemSettingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Inertia;
 
 class SettingsController extends Controller
 {
@@ -59,7 +60,23 @@ class SettingsController extends Controller
 
     public function permissions()
     {
-        return view('settings.permissions', ['users' => User::orderBy('name')->get(), 'modules' => SystemModule::orderBy('sort_order')->get(), 'grants' => DB::table('system_module_user')->get()->keyBy(fn ($row) => $row->user_id.'-'.$row->system_module_id)]);
+        $users = User::orderBy('name')->get(['id', 'name', 'email']);
+        $modules = SystemModule::orderBy('sort_order')->get(['id', 'key', 'name', 'is_enabled']);
+        $stored = DB::table('system_module_user')->get()->keyBy(fn ($row) => $row->user_id.'-'.$row->system_module_id);
+        $permissions = $users->mapWithKeys(fn (User $user) => [(string) $user->id => $modules->mapWithKeys(function (SystemModule $module) use ($stored, $user) {
+            $grant = $stored->get($user->id.'-'.$module->id);
+
+            return [(string) $module->id => ['view' => $grant ? (bool) $grant->can_view : true, 'manage' => $grant ? (bool) $grant->can_manage : false]];
+        })->all()])->all();
+
+        return Inertia::render('Settings/Permissions', [
+            'users' => $users,
+            'modules' => $modules,
+            'permissions' => $permissions,
+            'endpoints' => ['update' => route('settings.permissions.update')],
+            'tabs' => collect(['index' => 'Resumen', 'brand' => 'Marca', 'modules' => 'Módulos', 'permissions' => 'Permisos', 'appearance' => 'Apariencia', 'general' => 'Institución', 'financial' => 'Financiera', 'accounting' => 'Contabilidad', 'sequences' => 'Consecutivos'])
+                ->map(fn ($label, $name) => ['label' => $label, 'url' => route('settings.'.$name), 'active' => $name === 'permissions'])->values(),
+        ]);
     }
 
     public function updatePermissions(UpdatePermissionSettingsRequest $request)

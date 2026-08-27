@@ -49,6 +49,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/rutas/{collectionRoute}/editar', [CollectionRouteController::class, 'edit'])->name('routes.edit');
     Route::put('/rutas/{collectionRoute}', [CollectionRouteController::class, 'update'])->name('routes.update');
     Route::patch('/rutas/{collectionRoute}/estado', [CollectionRouteController::class, 'updateStatus'])->name('routes.status');
+    Route::patch('/rutas/paradas/{stop}/visitada', [CollectionRouteController::class, 'markVisited'])->name('routes.stops.visit');
     Route::get('/cobranza', [CollectionController::class, 'index'])->middleware('module:collections')->name('collections.index');
     Route::post('/cobranza/paradas/{stop}', [CollectionController::class, 'store'])->name('collections.store');
     Route::prefix('contabilidad')->name('accounting.')->middleware('module:accounting')->group(function () {

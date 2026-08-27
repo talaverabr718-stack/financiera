@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     @php $brand = \Illuminate\Support\Facades\Schema::hasTable('system_settings') ? \App\Models\SystemSetting::where('group','brand')->pluck('value','key') : collect(); @endphp
     <title>@yield('title') · {{$brand['system_name'] ?? 'Centro Financiero 360'}}</title>
     @vite(['resources/css/app.css','resources/js/app.js'])

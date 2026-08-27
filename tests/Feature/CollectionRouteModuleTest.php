@@ -10,7 +10,6 @@ use App\Models\User;
 use App\Models\Zone;
 use Database\Seeders\ClientModuleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class CollectionRouteModuleTest extends TestCase
@@ -31,7 +30,28 @@ class CollectionRouteModuleTest extends TestCase
         $this->assertSame([1, 2], $route->stops->pluck('position')->all());
     }
 
-    public function test_route_status_can_be_updated_but_client_status_cannot_be_changed_from_routes(): void
+    public function test_daily_routes_are_created_for_an_inclusive_date_range(): void
+    {
+        $user = User::factory()->create();
+        $branch = Branch::create(['code' => 'B-RANGE', 'name' => 'Central']);
+        $zone = Zone::create(['branch_id' => $branch->id, 'code' => 'Z-RANGE', 'name' => 'Centro']);
+        $seller = SellerProfile::create(['user_id' => $user->id, 'branch_id' => $branch->id, 'zone_id' => $zone->id, 'code' => 'V-RANGE', 'status' => 'active', 'capabilities' => ['collections']]);
+        $client = Client::create(['code' => 'CLI-RANGE', 'full_name' => 'Cliente del rango', 'address' => 'Estelí', 'status' => 'active']);
+
+        $this->post(route('routes.store'), [
+            'name' => 'Ruta semanal',
+            'scheduled_date' => '2025-04-17',
+            'scheduled_until' => '2025-04-19',
+            'collector_id' => $seller->id,
+            'client_ids' => [$client->id],
+        ])->assertSessionHasNoErrors()->assertSessionHas('success', 'Se crearon 3 rutas para el rango seleccionado.');
+
+        $dates = CollectionRoute::orderBy('scheduled_date')->get()->map(fn ($route) => $route->scheduled_date->format('Y-m-d'))->all();
+        $this->assertSame(['2025-04-17', '2025-04-18', '2025-04-19'], $dates);
+        $this->assertSame(3, CollectionRoute::withCount('stops')->get()->sum('stops_count'));
+    }
+
+    public function test_route_status_can_be_updated_without_changing_client_status(): void
     {
         $this->seed(ClientModuleSeeder::class);
         $route = CollectionRoute::with('stops')->firstOrFail();
@@ -39,7 +59,29 @@ class CollectionRouteModuleTest extends TestCase
         $this->patch(route('routes.status', $route), ['status' => 'completed'])->assertSessionHasNoErrors();
         $this->assertSame('completed', $route->fresh()->status);
         $this->assertSame('pending', $route->stops->last()->fresh()->status);
-        $this->assertFalse(Route::has('routes.stops.update'));
+        $this->assertSame('active', $route->stops->last()->client->fresh()->status);
+    }
+
+    public function test_client_visit_can_be_confirmed_from_route_without_creating_a_collection(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $user = User::firstOrFail();
+        $stop = CollectionRoute::with('stops.client')->firstOrFail()->stops->firstWhere('status', 'pending');
+        $clientStatus = $stop->client->status;
+
+        $this->actingAs($user)->patchJson(route('routes.stops.visit', $stop), [
+            'notes' => 'Cliente atendido en su domicilio.',
+        ])->assertOk()->assertJsonPath('stop.status', 'visited');
+
+        $this->assertSame('visited', $stop->fresh()->status);
+        $this->assertNotNull($stop->fresh()->visited_at);
+        $this->assertSame($clientStatus, $stop->client->fresh()->status);
+        $this->assertDatabaseCount('collection_records', 0);
+        $this->assertDatabaseHas('audit_events', [
+            'auditable_type' => $stop->getMorphClass(),
+            'auditable_id' => $stop->id,
+            'action' => 'route_stop_visited',
+        ]);
     }
 
     public function test_selected_route_only_lists_its_assigned_clients(): void
@@ -68,8 +110,8 @@ class CollectionRouteModuleTest extends TestCase
         $response->assertOk()
             ->assertSee($selectedRoute->stops->first()->client->full_name)
             ->assertDontSee($otherClient->full_name)
-            ->assertSee('Solo lectura')
-            ->assertDontSee('Visitado</button>', false);
+            ->assertSee('route-operations-data', false)
+            ->assertSee('endpointTemplate', false);
     }
 
     public function test_google_maps_routes_library_maps_the_ordered_stops(): void

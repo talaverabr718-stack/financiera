@@ -328,6 +328,14 @@ main, main > *, .card, .table-wrap { min-width: 0; }
 .searchable-combobox-input { width: 100%; min-height: 2.5rem; border: 1px solid #cbd5e1; border-radius: .625rem; background: #fff; padding: .625rem 2.5rem .625rem .875rem; font-size: .875rem; outline: none; transition: border-color .15s,box-shadow .15s; }
 .searchable-combobox-input:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.15); }
 
+.product-field-locked {
+    cursor: not-allowed !important;
+    border-bottom-color: #94a3b8 !important;
+    background: linear-gradient(to bottom, transparent 70%, rgba(100, 116, 139, .06)) !important;
+    color: #475569 !important;
+}
+.product-field-locked:focus { box-shadow: none !important; }
+
 /* Clientes: campos compactos inspirados en Material, con etiqueta y línea activa. */
 #client-form > section .field-label {
     position: relative;

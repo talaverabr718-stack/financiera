@@ -3,9 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\CollectionRouteRequest;
+use App\Http\Requests\MarkRouteStopVisitedRequest;
 use App\Models\Client;
 use App\Models\CollectionRoute;
+use App\Models\CollectionRouteStop;
 use App\Models\SellerProfile;
+use App\Services\AuditService;
+use App\Services\DocumentSequenceService;
+use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -28,21 +34,37 @@ class CollectionRouteController extends Controller
         return $this->form(new CollectionRoute);
     }
 
-    public function store(CollectionRouteRequest $request)
+    public function store(CollectionRouteRequest $request, DocumentSequenceService $sequences)
     {
         $data = $request->validated();
 
-        $route = DB::transaction(function () use ($data) {
-            $next = ((int) CollectionRoute::max('id')) + 1;
-            $route = CollectionRoute::create($data + ['code' => 'RUT-'.str_pad((string) $next, 6, '0', STR_PAD_LEFT)]);
-            foreach ($data['client_ids'] as $position => $clientId) {
-                $route->stops()->create(['client_id' => $clientId, 'position' => $position + 1]);
+        $routes = DB::transaction(function () use ($data, $sequences) {
+            $start = Carbon::parse($data['scheduled_date'])->startOfDay();
+            $end = Carbon::parse($data['scheduled_until'] ?? $data['scheduled_date'])->startOfDay();
+            $created = collect();
+
+            foreach (CarbonPeriod::create($start, $end) as $date) {
+                $route = CollectionRoute::create([
+                    'code' => $sequences->next('collection_route', 'RUT-'),
+                    'name' => $data['name'],
+                    'scheduled_date' => $date,
+                    'collector_id' => $data['collector_id'],
+                    'starts_at' => $data['starts_at'] ?? null,
+                    'notes' => $data['notes'] ?? null,
+                ]);
+                foreach ($data['client_ids'] as $position => $clientId) {
+                    $route->stops()->create(['client_id' => $clientId, 'position' => $position + 1]);
+                }
+                $created->push($route);
             }
 
-            return $route;
+            return $created;
         });
 
-        return redirect()->route('routes.index', ['date' => $route->scheduled_date->format('Y-m-d')])->with('success', 'Ruta de cobranza creada.');
+        $firstRoute = $routes->firstOrFail();
+        $message = $routes->count() === 1 ? 'Ruta de cobranza creada.' : "Se crearon {$routes->count()} rutas para el rango seleccionado.";
+
+        return redirect()->route('routes.index', ['date' => $firstRoute->scheduled_date->format('Y-m-d'), 'route' => $firstRoute->id])->with('success', $message);
     }
 
     public function edit(CollectionRoute $collectionRoute)
@@ -85,6 +107,57 @@ class CollectionRouteController extends Controller
         $collectionRoute->update($data);
 
         return back()->with('success', 'Estado de la ruta actualizado.');
+    }
+
+    public function markVisited(MarkRouteStopVisitedRequest $request, CollectionRouteStop $stop, AuditService $audit)
+    {
+        $stop = DB::transaction(function () use ($request, $stop, $audit) {
+            $lockedStop = CollectionRouteStop::with(['client', 'route'])->lockForUpdate()->findOrFail($stop->id);
+
+            if ($lockedStop->status !== 'visited') {
+                $before = $lockedStop->only(['status', 'visited_at', 'notes']);
+                $lockedStop->update([
+                    'status' => 'visited',
+                    'visited_at' => now(),
+                    'notes' => $request->validated('notes') ?: $lockedStop->notes,
+                ]);
+
+                if ($lockedStop->route->status === 'planned') {
+                    $lockedStop->route->update(['status' => 'active']);
+                }
+                if (! $lockedStop->route->stops()->where('status', 'pending')->exists()) {
+                    $lockedStop->route->update(['status' => 'completed']);
+                }
+
+                $audit->record(
+                    $lockedStop,
+                    'route_stop_visited',
+                    $request->user()?->id,
+                    $before,
+                    $lockedStop->only(['status', 'visited_at', 'notes']),
+                    'Visita confirmada desde el panel de rutas',
+                    ['collection_route_id' => $lockedStop->collection_route_id],
+                    $request->header('X-Request-ID'),
+                    $request->ip(),
+                    $request->userAgent(),
+                );
+            }
+
+            return $lockedStop->fresh(['client', 'route']);
+        });
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'stop' => [
+                    'id' => $stop->id,
+                    'status' => $stop->status,
+                    'visited_at' => $stop->visited_at?->toISOString(),
+                ],
+                'route_status' => $stop->route->status,
+            ]);
+        }
+
+        return back()->with('success', 'Cliente marcado como visitado.');
     }
 
     private function form(CollectionRoute $route)

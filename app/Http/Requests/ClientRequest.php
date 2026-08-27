@@ -27,6 +27,8 @@ class ClientRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:30'], 'email' => ['nullable', 'email', 'max:180'],
             'address' => ['required', 'string', 'max:1000'], 'department' => ['required', Rule::in(array_keys($locations))],
             'municipality' => ['required', 'string', 'max:100'], 'neighborhood' => ['required', 'string', 'max:150'],
+            'latitude' => ['nullable', 'required_with:longitude', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'required_with:latitude', 'numeric', 'between:-180,180'],
             'economic_activity' => ['nullable', 'string', 'max:180'], 'workplace' => ['nullable', 'string', 'max:180'],
             'job_position' => ['nullable', 'string', 'max:150'], 'workplace_address' => ['nullable', 'string', 'max:1000'],
             'employment_duration_months' => ['nullable', 'integer', 'min:0'], 'estimated_income' => ['required', 'decimal:0,2', 'min:0'],
