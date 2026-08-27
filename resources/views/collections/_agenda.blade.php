@@ -25,6 +25,7 @@
             $dayStops = $selectedRoute->stops;
             $dayPending = $dayStops->where('status', 'pending')->count();
             $dayDone = $dayStops->where('status', 'visited')->count();
+            $stopLabels = ['pending' => 'Pendiente', 'visited' => 'Visitado', 'not_found' => 'No encontrado', 'rescheduled' => 'Reprogramado'];
         @endphp
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-5 py-3">
             <div>
@@ -100,7 +101,18 @@
                         </td>
                         <td class="table-cell text-right font-semibold tabular-nums">{{ $loan ? 'C$ '.number_format((float) $loan->outstanding_balance, 2) : '—' }}</td>
                         <td class="table-cell">
-                            <span class="text-[10px] font-semibold {{ $stop->status === 'pending' ? 'text-amber-600' : 'text-emerald-600' }}">{{ $stop->status === 'pending' ? 'Pendiente' : 'Gestionado' }}</span>
+                            @php
+                                $stopTone = match ($stop->status) {
+                                    'pending' => 'text-amber-600',
+                                    'visited' => 'text-emerald-600',
+                                    'not_found' => 'text-rose-600',
+                                    default => 'text-slate-600',
+                                };
+                            @endphp
+                            <p class="text-[10px] font-semibold {{ $stopTone }}">{{ $stopLabels[$stop->status] ?? $stop->status }}</p>
+                            @if($stop->visitedAtLabel())
+                                <p class="mt-0.5 text-[10px] text-slate-400">{{ $stop->visitedAtLabel() }}</p>
+                            @endif
                         </td>
                         <td class="table-cell text-right">
                             <button type="button" class="btn-primary" data-open-pay="pay-{{ $stop->id }}">Pagar</button>

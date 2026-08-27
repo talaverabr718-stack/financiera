@@ -45,6 +45,7 @@ class CreditGuarantorWorkflowTest extends TestCase
     {
         Storage::fake('local');
         $this->seed(ClientModuleSeeder::class);
+        $this->cancelOpenCredits();
         $user = User::firstOrFail();
 
         $this->actingAs($user)->post(route('applications.store'), $this->payload([$this->newGuarantorRow()]))->assertSessionHasNoErrors();
@@ -61,6 +62,7 @@ class CreditGuarantorWorkflowTest extends TestCase
     {
         Storage::fake('local');
         $this->seed(ClientModuleSeeder::class);
+        $this->cancelOpenCredits();
         $user = User::firstOrFail();
         $this->actingAs($user)->post(route('applications.store'), $this->payload([$this->newGuarantorRow()]));
         $first = CreditApplication::latest('id')->firstOrFail();
@@ -83,6 +85,7 @@ class CreditGuarantorWorkflowTest extends TestCase
     {
         Storage::fake('local');
         $this->seed(ClientModuleSeeder::class);
+        $this->cancelOpenCredits();
         $user = User::firstOrFail();
         $this->actingAs($user)->post(route('applications.store'), $this->payload([$this->newGuarantorRow()]));
         $application = CreditApplication::latest('id')->firstOrFail();

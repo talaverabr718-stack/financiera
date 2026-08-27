@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\CreditApplication;
 use App\Models\CreditProduct;
 use App\Models\Guarantor;
+use App\Models\Loan;
 use App\Models\SellerProfile;
 use App\Services\CreditApplicationService;
 use Illuminate\Http\Request;
@@ -30,9 +31,18 @@ class CreditApplicationController extends Controller
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        return $this->form(new CreditApplication);
+        $application = new CreditApplication;
+        if ($request->filled('client_id')) {
+            $client = Client::with('activeAssignment')->find($request->integer('client_id'));
+            if ($client?->canOriginateNewCredit()) {
+                $application->client_id = $client->id;
+                $application->seller_id = $client->activeAssignment?->seller_id;
+            }
+        }
+
+        return $this->form($application);
     }
 
     public function edit(CreditApplication $application)
@@ -75,7 +85,13 @@ class CreditApplicationController extends Controller
             throw ValidationException::withMessages(['status' => 'Todos los fiadores requeridos deben estar aprobados antes de aprobar la solicitud.']);
         }
         $decision = in_array($data['status'], ['approved', 'rejected'], true);
-        DB::transaction(fn () => CreditApplication::lockForUpdate()->findOrFail($application->id)->update($data + ['decided_by' => $decision ? auth()->id() : $application->decided_by, 'decided_at' => $decision ? now() : $application->decided_at]));
+        DB::transaction(fn () => CreditApplication::lockForUpdate()->findOrFail($application->id)->update($data + [
+            'decided_by' => $decision ? auth()->id() : $application->decided_by,
+            'decided_at' => $decision ? now() : $application->decided_at,
+            'proposed_first_payment_date' => $data['status'] === 'approved'
+                ? now()->toDateString()
+                : $application->proposed_first_payment_date,
+        ]));
 
         return back()->with('success', 'Estado de la solicitud actualizado.');
     }
@@ -85,6 +101,6 @@ class CreditApplicationController extends Controller
         $application->load('guarantees.latestEvaluation');
         $guarantors = Guarantor::with(['guarantees.application.client', 'guarantees.loan', 'guarantees.latestEvaluation'])->orderBy('full_name')->get();
 
-        return view('applications.form', ['application' => $application, 'clients' => Client::where('status', 'active')->orderBy('full_name')->get(), 'sellers' => SellerProfile::with('user')->where('status', 'active')->whereJsonContains('capabilities', 'credit_origination')->get(), 'products' => CreditProduct::where('is_active', true)->orderBy('name')->get(), 'guarantors' => $guarantors]);
+        return view('applications.form', ['application' => $application, 'clients' => Client::where('status', 'active')->withCount(['loans as open_loans_count' => fn ($query) => $query->whereIn('status', Loan::COLLECTIBLE_STATUSES)])->orderBy('full_name')->get(), 'sellers' => SellerProfile::with('user')->where('status', 'active')->whereJsonContains('capabilities', 'credit_origination')->get(), 'products' => CreditProduct::where('is_active', true)->orderBy('name')->get(), 'guarantors' => $guarantors]);
     }
 }

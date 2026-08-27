@@ -30,6 +30,7 @@ class NavigationService
                 ['key' => 'clients', 'label' => 'Clientes', 'url' => route('clients.index'), 'inertia' => true],
                 ['key' => 'applications', 'label' => 'Solicitudes', 'url' => route('applications.index'), 'inertia' => true],
                 ['key' => 'loans', 'label' => 'Cartera', 'url' => route('loans.index'), 'inertia' => true],
+                ['key' => 'credit_history', 'label' => 'Historial crediticio', 'url' => route('credit-history.index'), 'inertia' => true],
                 ['key' => 'delinquency', 'label' => 'Clientes en mora', 'url' => route('delinquency.index'), 'inertia' => true],
                 ['key' => 'amortization', 'label' => 'Calculadora', 'url' => route('amortization.index'), 'inertia' => true],
             ]],

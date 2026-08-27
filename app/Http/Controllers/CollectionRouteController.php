@@ -24,9 +24,19 @@ class CollectionRouteController extends Controller
         $date = $request->date('date') ?? today();
         $routes = CollectionRoute::with(['collector.user', 'stops.client'])
             ->whereDate('scheduled_date', $date)->orderBy('starts_at')->get();
-        $selectedRoute = $routes->firstWhere('id', $request->integer('route')) ?? $routes->first();
+        $openRoutes = $routes->filter->isOpenForField()->values();
+        $completedRoutes = $routes->reject->isOpenForField()->values();
+        $requested = $routes->firstWhere('id', $request->integer('route'));
+        $selectedRoute = $requested ?? $openRoutes->first();
 
-        return view('routes.index', ['routes' => $routes, 'selectedRoute' => $selectedRoute, 'date' => $date, 'googleMapsKey' => config('services.google_maps.key')]);
+        return view('routes.index', [
+            'routes' => $routes,
+            'openRoutes' => $openRoutes,
+            'completedRoutes' => $completedRoutes,
+            'selectedRoute' => $selectedRoute,
+            'date' => $date,
+            'googleMapsKey' => config('services.google_maps.key'),
+        ]);
     }
 
     public function create()
@@ -151,7 +161,8 @@ class CollectionRouteController extends Controller
                 'stop' => [
                     'id' => $stop->id,
                     'status' => $stop->status,
-                    'visited_at' => $stop->visited_at?->toISOString(),
+                    'visited_at' => $stop->visited_at?->timezone(config('app.timezone'))->toIso8601String(),
+                    'visited_at_label' => $stop->visitedAtLabel(),
                 ],
                 'route_status' => $stop->route->status,
             ]);

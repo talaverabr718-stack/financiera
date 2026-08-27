@@ -10,11 +10,34 @@ use App\Models\User;
 use App\Models\Zone;
 use Database\Seeders\ClientModuleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class CollectionRouteModuleTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_new_route_skips_a_code_already_used_by_seed_data(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $seller = SellerProfile::query()->firstOrFail();
+        $client = Client::query()->firstOrFail();
+        DB::table('document_sequences')->where('key', 'collection_route')->delete();
+
+        $this->post(route('routes.store'), [
+            'name' => 'Ruta Estelí nueva',
+            'scheduled_date' => today()->format('Y-m-d'),
+            'collector_id' => $seller->id,
+            'starts_at' => '08:00',
+            'client_ids' => [$client->id],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('collection_routes', [
+            'name' => 'Ruta Estelí nueva',
+            'code' => 'RUT-000002',
+        ]);
+        $this->assertSame(1, CollectionRoute::query()->where('code', 'RUT-000001')->count());
+    }
 
     public function test_route_is_created_with_ordered_client_stops(): void
     {
@@ -71,7 +94,9 @@ class CollectionRouteModuleTest extends TestCase
 
         $this->actingAs($user)->patchJson(route('routes.stops.visit', $stop), [
             'notes' => 'Cliente atendido en su domicilio.',
-        ])->assertOk()->assertJsonPath('stop.status', 'visited');
+        ])->assertOk()
+            ->assertJsonPath('stop.status', 'visited')
+            ->assertJsonPath('stop.visited_at_label', $stop->fresh()->visitedAtLabel());
 
         $this->assertSame('visited', $stop->fresh()->status);
         $this->assertNotNull($stop->fresh()->visited_at);
@@ -82,6 +107,47 @@ class CollectionRouteModuleTest extends TestCase
             'auditable_id' => $stop->id,
             'action' => 'route_stop_visited',
         ]);
+    }
+
+    public function test_completed_routes_move_to_the_completed_panel(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $user = User::firstOrFail();
+        $completed = CollectionRoute::with('stops')->firstOrFail();
+        $open = CollectionRoute::create([
+            'code' => 'RUT-OPEN-01',
+            'name' => 'Ruta aún pendiente del día',
+            'scheduled_date' => $completed->scheduled_date,
+            'collector_id' => $completed->collector_id,
+            'starts_at' => '10:00',
+        ]);
+        $open->stops()->create([
+            'client_id' => Client::query()->firstOrFail()->id,
+            'position' => 1,
+            'status' => 'pending',
+        ]);
+
+        foreach ($completed->stops->where('status', 'pending') as $stop) {
+            $this->actingAs($user)->patchJson(route('routes.stops.visit', $stop), [])->assertOk();
+        }
+
+        $this->assertSame('completed', $completed->fresh()->status);
+
+        $this->get(route('routes.index', [
+            'date' => $completed->scheduled_date->format('Y-m-d'),
+        ]))->assertOk()
+            ->assertSee('Ruta aún pendiente del día')
+            ->assertSee('Rutas completadas')
+            ->assertSee($completed->name)
+            ->assertViewHas('openRoutes', fn ($routes) => $routes->pluck('id')->all() === [$open->id])
+            ->assertViewHas('completedRoutes', fn ($routes) => $routes->pluck('id')->all() === [$completed->id])
+            ->assertViewHas('selectedRoute', fn ($route) => $route->id === $open->id);
+
+        $this->get(route('routes.index', [
+            'date' => $completed->scheduled_date->format('Y-m-d'),
+            'route' => $completed->id,
+        ]))->assertOk()
+            ->assertViewHas('selectedRoute', fn ($route) => $route->id === $completed->id);
     }
 
     public function test_selected_route_only_lists_its_assigned_clients(): void

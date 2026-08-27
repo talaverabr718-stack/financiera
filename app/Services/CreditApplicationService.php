@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Client;
 use App\Models\CreditApplication;
+use App\Models\CreditProduct;
 use App\Models\Guarantor;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
@@ -11,12 +12,12 @@ use Illuminate\Support\Facades\DB;
 
 class CreditApplicationService
 {
-    public function __construct(private DocumentSequenceService $sequences) {}
+    public function __construct(private DocumentSequenceService $sequences, private AmortizationCalculator $calculator) {}
 
     public function create(array $data): CreditApplication
     {
         return DB::transaction(function () use ($data) {
-            $application = CreditApplication::create(Arr::except($data, ['guarantors']) + [
+            $application = CreditApplication::create(Arr::except($this->withProductTerms($data), ['guarantors']) + [
                 'number' => $this->sequences->next('credit_application', 'SOL-'),
                 'economic_snapshot' => $this->clientSnapshot((int) $data['client_id']),
             ]);
@@ -30,11 +31,49 @@ class CreditApplicationService
     {
         return DB::transaction(function () use ($application, $data) {
             $application = CreditApplication::lockForUpdate()->findOrFail($application->id);
-            $application->update(Arr::except($data, ['guarantors']));
+            $application->update(Arr::except($this->withProductTerms($data), ['guarantors']));
             $this->recordGuarantees($application, $data['guarantors'] ?? []);
 
             return $application->fresh();
         });
+    }
+
+    private function withProductTerms(array $data): array
+    {
+        $product = CreditProduct::query()->find($data['credit_product_id'] ?? null);
+        if (! $product) {
+            return $data;
+        }
+
+        $data['interest_method'] = ! empty($data['interest_method']) ? $data['interest_method'] : $product->default_interest_method;
+        $data['administrative_fee'] = array_key_exists('administrative_fee', $data) && $data['administrative_fee'] !== null && $data['administrative_fee'] !== ''
+            ? $data['administrative_fee']
+            : ($product->default_administrative_fee ?? '0.00');
+        $data['interest_rate'] = ! empty($data['interest_rate']) ? $data['interest_rate'] : $product->default_interest_rate;
+
+        return $this->withProjectedPayment($data);
+    }
+
+    private function withProjectedPayment(array $data): array
+    {
+        $term = (int) ($data['term'] ?? 0);
+        $frequency = $data['payment_frequency'] ?? null;
+        $principal = $data['requested_amount'] ?? null;
+        if ($term < 1 || $principal === null || ! isset(AmortizationCalculator::FREQUENCIES[$frequency])) {
+            return $data;
+        }
+
+        $schedule = $this->calculator->calculate([
+            'principal' => $principal,
+            'annual_rate' => $data['interest_rate'] ?? 0,
+            'periods' => $term,
+            'method' => $this->calculator->resolveCalculatorMethod($data['interest_method'] ?? null),
+            'frequency' => $frequency,
+            'first_payment_date' => $data['applied_on'] ?? now()->toDateString(),
+        ]);
+        $data['installment_amount'] = $schedule['rows'][0]['payment'];
+
+        return $data;
     }
 
     private function recordGuarantees(CreditApplication $application, array $rows): void

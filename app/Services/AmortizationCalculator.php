@@ -20,6 +20,14 @@ class AmortizationCalculator
         'monthly' => ['label' => 'Mensual', 'periods_per_year' => 12],
     ];
 
+    public const PRODUCT_METHODS = [
+        'french' => 'level_payment',
+        'flat' => 'flat_interest',
+        'declining_balance' => 'constant_principal',
+    ];
+
+    public const MAX_PERIODS = 365;
+
     public function calculate(array $data): array
     {
         $principal = round((float) $data['principal'], 2);
@@ -93,5 +101,63 @@ class AmortizationCalculator
             'biweekly' => $firstDate->addDays(15 * $offset),
             'monthly' => $firstDate->addMonthsNoOverflow($offset),
         };
+    }
+
+    public function resolveCalculatorMethod(?string $method): string
+    {
+        if ($method && isset(self::METHODS[$method])) {
+            return $method;
+        }
+
+        return self::PRODUCT_METHODS[$method] ?? 'level_payment';
+    }
+
+    public function projectFromInstallment(array $data): array
+    {
+        $principal = round((float) ($data['principal'] ?? 0), 2);
+        $installment = round((float) ($data['installment'] ?? 0), 2);
+        $annualRate = (float) ($data['annual_rate'] ?? 0);
+        $frequency = $data['frequency'] ?? '';
+        $method = $this->resolveCalculatorMethod($data['method'] ?? null);
+        $empty = [
+            'periods' => 0,
+            'regular_payment' => '0.00',
+            'last_payment' => '0.00',
+            'total_interest' => '0.00',
+            'total_payment' => '0.00',
+            'error' => null,
+        ];
+
+        if ($principal <= 0 || $installment <= 0 || ! isset(self::FREQUENCIES[$frequency])) {
+            return $empty;
+        }
+
+        $periods = (int) ceil($principal / $installment);
+        if ($periods < 1) {
+            return $empty;
+        }
+        if ($periods > self::MAX_PERIODS) {
+            return array_merge($empty, ['error' => 'Aumenta el monto de cada cuota. El crédito no puede superar 365 pagos.']);
+        }
+
+        $schedule = $this->calculate([
+            'principal' => $principal,
+            'annual_rate' => $annualRate,
+            'periods' => $periods,
+            'method' => $method,
+            'frequency' => $frequency,
+            'first_payment_date' => $data['first_payment_date'] ?? now()->toDateString(),
+        ]);
+        $firstPayment = $schedule['rows'][0]['payment'] ?? '0.00';
+        $lastPayment = $schedule['rows'][$periods - 1]['payment'] ?? $firstPayment;
+
+        return [
+            'periods' => $periods,
+            'regular_payment' => $firstPayment,
+            'last_payment' => $lastPayment,
+            'total_interest' => $schedule['total_interest'],
+            'total_payment' => $schedule['total_payment'],
+            'error' => null,
+        ];
     }
 }

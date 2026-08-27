@@ -13,6 +13,11 @@ class CollectionRouteStop extends Model
         return ['visited_at' => 'datetime'];
     }
 
+    public function visitedAtLabel(): ?string
+    {
+        return $this->visited_at?->timezone(config('app.timezone'))->format('d/m/Y H:i');
+    }
+
     public function route()
     {
         return $this->belongsTo(CollectionRoute::class, 'collection_route_id');

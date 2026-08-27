@@ -11,6 +11,7 @@ use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\CollectionRouteController;
 use App\Http\Controllers\CreditApplicationController;
 use App\Http\Controllers\CreditGuarantorController;
+use App\Http\Controllers\CreditHistoryController;
 use App\Http\Controllers\CreditProductController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DelinquencyCaseController;
@@ -41,6 +42,8 @@ Route::middleware('auth')->group(function () {
     Route::resource('colaboradores', CollaboratorController::class)->middleware('module:collaborators')->parameters(['colaboradores' => 'collaborator'])->names('collaborators');
     Route::get('/cartera', [LoanPortfolioController::class, 'index'])->middleware('module:loans')->name('loans.index');
     Route::get('/cartera/{loan}', [LoanPortfolioController::class, 'show'])->middleware('module:loans')->name('loans.show');
+    Route::get('/historial-crediticio', [CreditHistoryController::class, 'index'])->middleware('module:credit_history')->name('credit-history.index');
+    Route::get('/historial-crediticio/{client}', [CreditHistoryController::class, 'show'])->middleware('module:credit_history')->name('credit-history.show');
     Route::patch('/cartera/{loan}/estado', [LoanPortfolioController::class, 'updateStatus'])->middleware('module:loans')->name('loans.status');
     Route::post('/cartera/{loan}/mora/recalcular', [DelinquencyCaseController::class, 'recalculate'])->middleware('module:delinquency')->name('loans.delinquency.recalculate');
     Route::get('/mora', [DelinquencyCaseController::class, 'index'])->middleware('module:delinquency')->name('delinquency.index');

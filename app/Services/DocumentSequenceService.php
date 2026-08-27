@@ -22,6 +22,8 @@ class DocumentSequenceService
                 'payment' => ['payments', 'receipt_number'],
                 'journal_entry' => ['journal_entries', 'number'],
                 'delinquency_case' => ['delinquency_cases', 'code'],
+                'collection_route' => ['collection_routes', 'code'],
+                'credit_product' => ['credit_products', 'code'],
             ];
 
             if (isset($targets[$key])) {

@@ -137,6 +137,24 @@ class CollectionModuleTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $this->assertSame('visited', $stop->fresh()->status);
+        $this->assertNotNull($stop->fresh()->visited_at);
+        $visitLabel = $stop->fresh()->visitedAtLabel();
+        $this->assertNotNull($visitLabel);
+
+        $this->actingAs($user)->get(route('routes.index', [
+            'date' => $route->scheduled_date->format('Y-m-d'),
+            'route' => $route->id,
+        ]))->assertOk()
+            ->assertSee('visited_at_label', false)
+            ->assertSee($visitLabel)
+            ->assertSee('Visitado el '.$visitLabel);
+
+        $this->actingAs($user)->get(route('collections.index', [
+            'date' => $route->scheduled_date->format('Y-m-d'),
+            'agenda_route' => $route->id,
+        ]))->assertOk()
+            ->assertSee('Visitado')
+            ->assertSee($visitLabel);
         $record = CollectionRecord::firstOrFail();
         $this->assertSame('applied', $record->application_status);
         $this->assertSame('750.00', $record->amount);
