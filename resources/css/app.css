@@ -49,6 +49,13 @@ main, main > *, .card, .table-wrap { min-width: 0; }
 .table-wrap { max-width: 100%; overscroll-behavior-inline: contain; }
 .table-wrap table { min-width: max-content; }
 .modal-panel { max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); overflow-y: auto; }
+.pay-modal { overflow: hidden; }
+.pay-modal-panel { width: min(32rem, calc(100vw - 1.5rem)); max-height: 100% !important; overflow: hidden !important; }
+.pay-form textarea.pay-notes { min-height: 2.75rem; max-height: 6rem; resize: none; }
+.list-modal { overflow: hidden; }
+.list-modal-panel { width: min(64rem, calc(100vw - 1.5rem)); max-height: 100% !important; overflow: hidden !important; }
+.late-modal { overflow: hidden; }
+.late-modal-panel { width: min(64rem, calc(100vw - 1.5rem)); max-height: 100% !important; overflow: hidden !important; }
 
 @media (max-width: 40rem) {
     .page-title { font-size: 1.25rem; line-height: 1.65rem; }
