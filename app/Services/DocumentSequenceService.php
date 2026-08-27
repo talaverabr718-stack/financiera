@@ -19,7 +19,9 @@ class DocumentSequenceService
                 'credit_application' => ['credit_applications', 'number'],
                 'loan' => ['loans', 'number'],
                 'loan_disbursement' => ['loan_disbursements', 'number'],
+                'payment' => ['payments', 'receipt_number'],
                 'journal_entry' => ['journal_entries', 'number'],
+                'delinquency_case' => ['delinquency_cases', 'code'],
             ];
 
             if (isset($targets[$key])) {

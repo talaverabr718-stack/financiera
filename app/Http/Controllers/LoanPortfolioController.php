@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Loan;
 use App\Models\SellerProfile;
+use App\Services\DelinquencyTrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -39,16 +40,18 @@ class LoanPortfolioController extends Controller
 
     public function show(Loan $loan)
     {
-        $loan->load(['client.activeAssignment.seller.user', 'seller.user', 'application.product', 'disbursement.disbursedBy', 'installments', 'collectionRecords.collector.user', 'collectionRecords.recordedBy', 'guarantees.guarantor']);
+        $loan->load(['client.activeAssignment.seller.user', 'seller.user', 'application.product', 'disbursement.disbursedBy', 'installments', 'payments.allocations.installment', 'collectionRecords.collector.user', 'collectionRecords.recordedBy', 'guarantees.guarantor', 'activeDelinquencyCase.items']);
         $timeline = collect([
             ['date' => $loan->application->created_at, 'type' => 'Solicitud', 'title' => $loan->application->number, 'description' => 'Solicitud registrada'],
             ['date' => $loan->application->decided_at, 'type' => 'Aprobación', 'title' => 'Crédito aprobado', 'description' => $loan->currency.' '.number_format((float) $loan->principal, 2)],
             ['date' => $loan->disbursement?->created_at ?? $loan->disbursed_at, 'type' => 'Desembolso', 'title' => $loan->disbursement?->number ?? 'Desembolso', 'description' => $loan->disbursement?->payment_method ?? 'Préstamo activado'],
         ])->concat($loan->installments->map(fn ($item) => ['date' => $item->due_date, 'type' => 'Cuota', 'title' => 'Cuota '.$item->number, 'description' => 'Estado: '.$item->status]))
+            ->concat($loan->payments->map(fn ($item) => ['date' => $item->received_at, 'type' => 'Pago', 'title' => $item->receipt_number, 'description' => $loan->currency.' '.number_format((float) $item->amount, 2).' · '.$item->status]))
             ->concat($loan->collectionRecords->map(fn ($item) => ['date' => $item->recorded_at, 'type' => 'Cobranza', 'title' => $item->outcome, 'description' => ($item->amount ? $loan->currency.' '.number_format((float) $item->amount, 2).' · ' : '').($item->notes ?: 'Gestión registrada')]))
             ->filter(fn ($item) => $item['date'])->sortByDesc('date')->values();
+        $delinquency = app(DelinquencyTrackingService::class)->summarizeLoan($loan);
 
-        return view('loans.show', compact('loan', 'timeline'));
+        return view('loans.show', compact('loan', 'timeline', 'delinquency'));
     }
 
     public function updateStatus(Request $request, Loan $loan)

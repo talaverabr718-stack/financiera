@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class CollectionRecord extends Model
 {
-    protected $fillable = ['idempotency_key', 'collection_route_stop_id', 'client_id', 'loan_id', 'collector_id', 'outcome', 'amount', 'currency', 'payment_method', 'reference', 'promise_date', 'notes', 'application_status', 'recorded_at', 'recorded_by'];
+    protected $fillable = ['idempotency_key', 'collection_route_stop_id', 'client_id', 'loan_id', 'payment_id', 'collector_id', 'outcome', 'amount', 'currency', 'payment_method', 'reference', 'promise_date', 'notes', 'application_status', 'recorded_at', 'recorded_by'];
 
     protected function casts(): array
     {
@@ -31,6 +31,11 @@ class CollectionRecord extends Model
     public function loan()
     {
         return $this->belongsTo(Loan::class);
+    }
+
+    public function payment()
+    {
+        return $this->belongsTo(Payment::class);
     }
 
     public function recordedBy()
