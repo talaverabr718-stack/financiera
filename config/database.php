@@ -2,7 +2,9 @@
 
 use Illuminate\Support\Str;
 
-$mysqlSslCa = PHP_VERSION_ID >= 80400 ? Pdo\Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA;
+$mysqlSslCa = extension_loaded('pdo_mysql')
+    ? (PHP_VERSION_ID >= 80400 ? Pdo\Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA)
+    : null;
 
 return [
 
