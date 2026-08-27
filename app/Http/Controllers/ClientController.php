@@ -6,6 +6,7 @@ use App\Http\Requests\ClientRequest;
 use App\Models\Client;
 use App\Models\SellerProfile;
 use App\Services\ClientService;
+use App\Services\DelinquencyTrackingService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -71,7 +72,7 @@ class ClientController extends Controller
 
     public function show(Client $client)
     {
-        $client->load(['activeAssignment.seller.user', 'portfolioAssignments.seller.user', 'portfolioAssignments.assignedBy', 'assets', 'creditApplications.product', 'creditApplications.disbursement.disbursedBy', 'loans.installments', 'loans.collectionRecords.recordedBy', 'usedGuarantees.guarantor', 'usedGuarantees.loan', 'collectionRecords.collector.user', 'collectionRecords.recordedBy']);
+        $client->load(['activeAssignment.seller.user', 'portfolioAssignments.seller.user', 'portfolioAssignments.assignedBy', 'assets', 'creditApplications.product', 'creditApplications.disbursement.disbursedBy', 'loans.installments.paymentAllocations.payment.reversal', 'loans.activeDelinquencyCase', 'loans.collectionRecords.recordedBy', 'usedGuarantees.guarantor', 'usedGuarantees.loan', 'collectionRecords.collector.user', 'collectionRecords.recordedBy']);
 
         $timeline = collect([['type' => 'client', 'date' => $client->created_at, 'title' => 'Cliente registrado', 'description' => 'Se creó el expediente '.$client->code, 'url' => null]])
             ->concat($client->portfolioAssignments->map(fn ($item) => ['type' => 'activity', 'date' => $item->assigned_at, 'title' => 'Asignación de cartera', 'description' => $item->seller->user->name.' · '.$item->reason, 'url' => null]))
@@ -79,8 +80,9 @@ class ClientController extends Controller
             ->concat($client->creditApplications->filter->disbursement->map(fn ($item) => ['type' => 'credit', 'date' => $item->disbursement->created_at, 'title' => 'Desembolso '.$item->disbursement->number, 'description' => $item->currency.' '.number_format((float) $item->disbursement->amount, 2), 'url' => route('loans.show', $item->loan)]))
             ->concat($client->collectionRecords->map(fn ($item) => ['type' => 'collection', 'date' => $item->recorded_at, 'title' => 'Gestión de cobranza', 'description' => ($item->amount ? 'C$ '.number_format((float) $item->amount, 2).' · ' : '').($item->notes ?: $item->outcome), 'url' => $item->loan_id ? route('loans.show', $item->loan_id) : null]))
             ->sortByDesc('date')->values();
+        $delinquency = app(DelinquencyTrackingService::class)->summarizeClient($client);
 
-        return view('clients.show', compact('client', 'timeline'));
+        return view('clients.show', compact('client', 'timeline', 'delinquency'));
     }
 
     public function edit(Client $client)

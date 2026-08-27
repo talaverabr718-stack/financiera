@@ -20,6 +20,9 @@ class HandleInertiaRequests extends Middleware
                 'logout' => route('logout'),
                 'search' => route('search'),
             ],
+            'flash' => [
+                'success' => $request->session()->get('success'),
+            ],
         ];
     }
 }

@@ -37,6 +37,11 @@ class Client extends Model
         return $this->hasMany(Loan::class);
     }
 
+    public function delinquencyCases()
+    {
+        return $this->hasMany(DelinquencyCase::class);
+    }
+
     public function assets()
     {
         return $this->hasMany(ClientAsset::class);

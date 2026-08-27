@@ -20,6 +20,7 @@ class DocumentSequenceService
                 'loan' => ['loans', 'number'],
                 'loan_disbursement' => ['loan_disbursements', 'number'],
                 'journal_entry' => ['journal_entries', 'number'],
+                'delinquency_case' => ['delinquency_cases', 'code'],
             ];
 
             if (isset($targets[$key])) {

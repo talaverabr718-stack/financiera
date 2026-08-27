@@ -18,7 +18,7 @@ class AmortizationCalculatorTest extends TestCase
             ->has('methods', 3)
             ->has('frequencies', 4)
             ->has('navigation', 4)
-            ->has('navigation.1.items', 4)
+            ->has('navigation.1.items', 5)
             ->where('calculateUrl', route('amortization.calculate'))
         );
 

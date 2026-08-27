@@ -6,11 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 
 class Loan extends Model
 {
-    protected $fillable = ['number', 'credit_application_id', 'restructured_from_id', 'client_id', 'seller_id', 'status', 'currency', 'principal', 'principal_balance', 'interest_balance', 'fee_balance', 'delinquency_balance', 'approved_terms', 'disbursed_at', 'maturity_date', 'closed_at'];
+    public const COLLECTIBLE_STATUSES = ['active', 'delinquent'];
+
+    protected $fillable = ['number', 'credit_application_id', 'restructured_from_id', 'client_id', 'seller_id', 'status', 'currency', 'principal', 'principal_balance', 'interest_balance', 'fee_balance', 'delinquency_balance', 'delinquency_daily_rate', 'approved_terms', 'disbursed_at', 'maturity_date', 'closed_at'];
 
     protected function casts(): array
     {
-        return ['principal' => 'decimal:2', 'principal_balance' => 'decimal:2', 'interest_balance' => 'decimal:2', 'fee_balance' => 'decimal:2', 'delinquency_balance' => 'decimal:2', 'approved_terms' => 'array', 'disbursed_at' => 'date', 'maturity_date' => 'date', 'closed_at' => 'datetime'];
+        return ['principal' => 'decimal:2', 'principal_balance' => 'decimal:2', 'interest_balance' => 'decimal:2', 'fee_balance' => 'decimal:2', 'delinquency_balance' => 'decimal:2', 'delinquency_daily_rate' => 'decimal:6', 'approved_terms' => 'array', 'disbursed_at' => 'date', 'maturity_date' => 'date', 'closed_at' => 'datetime'];
     }
 
     public function client()
@@ -41,6 +43,21 @@ class Loan extends Model
     public function delinquencyAccruals()
     {
         return $this->hasMany(DelinquencyAccrual::class);
+    }
+
+    public function delinquencyCases()
+    {
+        return $this->hasMany(DelinquencyCase::class);
+    }
+
+    public function activeDelinquencyCase()
+    {
+        return $this->hasOne(DelinquencyCase::class)->where('status', DelinquencyCase::STATUS_ACTIVE);
+    }
+
+    public function isCollectible(): bool
+    {
+        return in_array($this->status, self::COLLECTIBLE_STATUSES, true);
     }
 
     public function payments()
