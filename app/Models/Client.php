@@ -37,6 +37,26 @@ class Client extends Model
         return $this->hasMany(Loan::class);
     }
 
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function hasOpenCredit(): bool
+    {
+        return $this->loans()->whereIn('status', Loan::COLLECTIBLE_STATUSES)->exists();
+    }
+
+    public function canOriginateNewCredit(): bool
+    {
+        return ! $this->hasOpenCredit();
+    }
+
+    public function scopeWithoutOpenCredit($query)
+    {
+        return $query->whereDoesntHave('loans', fn ($loans) => $loans->whereIn('status', Loan::COLLECTIBLE_STATUSES));
+    }
+
     public function delinquencyCases()
     {
         return $this->hasMany(DelinquencyCase::class);

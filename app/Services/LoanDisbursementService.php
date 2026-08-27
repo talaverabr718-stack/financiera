@@ -48,6 +48,7 @@ class LoanDisbursementService
                     'interest_rate' => $application->interest_rate,
                     'interest_method' => $application->interest_method,
                     'first_payment_date' => $application->proposed_first_payment_date?->format('Y-m-d'),
+                    'installment_amount' => $application->installment_amount,
                     'administrative_fee' => $application->administrative_fee,
                 ],
                 'disbursed_at' => $data['disbursed_at'],

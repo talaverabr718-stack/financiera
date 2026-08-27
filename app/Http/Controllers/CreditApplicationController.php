@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\CreditApplication;
 use App\Models\CreditProduct;
 use App\Models\Guarantor;
+use App\Models\Loan;
 use App\Models\SellerProfile;
 use App\Services\CreditApplicationService;
 use Carbon\Carbon;
@@ -32,9 +33,18 @@ class CreditApplicationController extends Controller
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        return $this->form(new CreditApplication);
+        $application = new CreditApplication;
+        if ($request->filled('client_id')) {
+            $client = Client::with('activeAssignment')->find($request->integer('client_id'));
+            if ($client?->canOriginateNewCredit()) {
+                $application->client_id = $client->id;
+                $application->seller_id = $client->activeAssignment?->seller_id;
+            }
+        }
+
+        return $this->form($application);
     }
 
     public function edit(CreditApplication $application)
@@ -63,10 +73,11 @@ class CreditApplicationController extends Controller
 
         return Inertia::render('Applications/Show', [
             'application' => [
-                ...$application->only(['id', 'number', 'status', 'requested_amount', 'approved_amount', 'currency', 'purpose', 'term', 'payment_frequency', 'interest_rate', 'interest_method', 'requires_guarantor', 'decision_reason']),
+                ...$application->only(['id', 'number', 'status', 'requested_amount', 'approved_amount', 'currency', 'purpose', 'applied_on', 'term', 'installment_amount', 'payment_frequency', 'interest_rate', 'interest_method', 'requires_guarantor', 'decision_reason']),
                 'client_name' => $application->client->full_name,
                 'product_name' => $application->product->name,
                 'seller_name' => $application->seller->user->name,
+                'applied_on' => $application->applied_on?->toDateString(),
                 'proposed_first_payment_date' => $application->proposed_first_payment_date?->toDateString(),
                 'approved_at' => $application->approved_at?->toISOString(),
                 'estimated_last_payment_date' => $application->estimated_last_payment_date?->toDateString(),
@@ -114,6 +125,10 @@ class CreditApplicationController extends Controller
             $locked = CreditApplication::lockForUpdate()->findOrFail($application->id);
             $approval = $data['status'] === 'approved';
             $approvedAt = $approval ? ($locked->approved_at ?? now()) : $locked->approved_at;
+            $firstPaymentDate = $approval ? ($locked->proposed_first_payment_date ?? today()) : $locked->proposed_first_payment_date;
+            if ($approval) {
+                $locked->proposed_first_payment_date = $firstPaymentDate;
+            }
             $lastPayment = $approval ? ($locked->estimated_last_payment_date ?? $this->estimateLastPaymentDate($locked, $approvedAt)) : $locked->estimated_last_payment_date;
 
             $locked->update($data + [
@@ -121,6 +136,7 @@ class CreditApplicationController extends Controller
                 'decided_at' => $decision ? now() : $locked->decided_at,
                 'approved_at' => $approvedAt,
                 'estimated_last_payment_date' => $lastPayment,
+                'proposed_first_payment_date' => $firstPaymentDate,
             ]);
         });
 
@@ -158,6 +174,6 @@ class CreditApplicationController extends Controller
         $application->load('guarantees.latestEvaluation');
         $guarantors = Guarantor::with(['guarantees.application.client', 'guarantees.loan', 'guarantees.latestEvaluation'])->orderBy('full_name')->get();
 
-        return view('applications.form', ['application' => $application, 'clients' => Client::where('status', 'active')->orderBy('full_name')->get(), 'sellers' => SellerProfile::with('user')->where('status', 'active')->whereJsonContains('capabilities', 'credit_origination')->get(), 'products' => CreditProduct::where('is_active', true)->orderBy('name')->get(), 'guarantors' => $guarantors]);
+        return view('applications.form', ['application' => $application, 'clients' => Client::where('status', 'active')->withCount(['loans as open_loans_count' => fn ($query) => $query->whereIn('status', Loan::COLLECTIBLE_STATUSES)])->orderBy('full_name')->get(), 'sellers' => SellerProfile::with('user')->where('status', 'active')->whereJsonContains('capabilities', 'credit_origination')->get(), 'products' => CreditProduct::where('is_active', true)->orderBy('name')->get(), 'guarantors' => $guarantors]);
     }
 }

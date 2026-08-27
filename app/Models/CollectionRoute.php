@@ -22,4 +22,13 @@ class CollectionRoute extends Model
     {
         return $this->hasMany(CollectionRouteStop::class)->orderBy('position');
     }
+
+    public function isOpenForField(): bool
+    {
+        if ($this->relationLoaded('stops')) {
+            return $this->stops->isEmpty() || $this->stops->contains(fn (CollectionRouteStop $stop) => $stop->status === 'pending');
+        }
+
+        return $this->stops()->where('status', 'pending')->exists() || ! $this->stops()->exists();
+    }
 }

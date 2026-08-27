@@ -46,6 +46,7 @@ class ClientModuleSeeder extends Seeder
         }
         DB::table('document_sequences')->updateOrInsert(['key' => 'client'], ['prefix' => 'CLI-', 'next_number' => 4, 'padding' => 6, 'created_at' => now(), 'updated_at' => now()]);
         DB::table('document_sequences')->updateOrInsert(['key' => 'credit_application'], ['prefix' => 'SOL-', 'next_number' => 4, 'padding' => 6, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('document_sequences')->updateOrInsert(['key' => 'collection_route'], ['prefix' => 'RUT-', 'next_number' => 2, 'padding' => 6, 'created_at' => now(), 'updated_at' => now()]);
     }
 
     private function identity(string $municipality, string $birthDate, string $serial): string
