@@ -137,8 +137,17 @@ class CollectionModuleTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $this->assertSame('visited', $stop->fresh()->status);
-        $this->assertSame('pending', CollectionRecord::firstOrFail()->application_status);
-        $this->assertSame('750.00', CollectionRecord::firstOrFail()->amount);
+        $record = CollectionRecord::firstOrFail();
+        $this->assertSame('applied', $record->application_status);
+        $this->assertSame('750.00', $record->amount);
+        $this->assertNotNull($record->payment_id);
+        $this->assertDatabaseHas('payments', [
+            'id' => $record->payment_id,
+            'loan_id' => $record->loan_id,
+            'amount' => '750.00',
+            'status' => 'applied',
+        ]);
+        $this->assertSame($record->loan->fresh()->outstanding_balance, $record->payment->fresh()->new_balance);
     }
 
     public function test_promise_reschedules_stop_and_requires_a_future_date(): void
@@ -184,6 +193,67 @@ class CollectionModuleTest extends TestCase
             'amount' => '500.00', 'payment_method' => 'cash',
         ])->assertSessionHasErrors('loan_id');
 
+        $this->assertDatabaseCount('collection_records', 0);
+    }
+
+    public function test_collection_payment_updates_loan_installments_in_portfolio(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $user = User::firstOrFail();
+        $stop = CollectionRoute::with('stops')->firstOrFail()->stops->where('status', 'pending')->firstOrFail();
+        $loan = Loan::where('client_id', $stop->client_id)->firstOrFail();
+        $installment = LoanInstallment::create([
+            'loan_id' => $loan->id,
+            'number' => 1,
+            'due_date' => today()->subDay(),
+            'principal_due' => '400.00',
+            'interest_due' => '100.00',
+            'fees_due' => '0.00',
+            'delinquency_due' => '0.00',
+            'principal_paid' => '0.00',
+            'interest_paid' => '0.00',
+            'fees_paid' => '0.00',
+            'delinquency_paid' => '0.00',
+            'paid_amount' => '0.00',
+            'status' => 'pending',
+        ]);
+        $previous = $loan->outstanding_balance;
+
+        $this->actingAs($user)->post(route('collections.store', $stop), [
+            'outcome' => 'collected',
+            'loan_id' => $loan->id,
+            'amount' => '500.00',
+            'payment_method' => 'cash',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame('paid', $installment->fresh()->status);
+        $this->assertSame('0.00', $installment->fresh()->outstandingAmount());
+        $this->assertSame('400.00', $installment->fresh()->principal_paid);
+        $this->assertSame('100.00', $installment->fresh()->interest_paid);
+        $this->assertSame(bcsub($previous, '500.00', 2), $loan->fresh()->outstanding_balance);
+        $this->assertDatabaseHas('payment_allocations', [
+            'installment_id' => $installment->id,
+            'component' => 'principal',
+            'amount' => '400.00',
+        ]);
+        $this->get(route('loans.show', $loan))->assertOk()->assertSee('REC-');
+    }
+
+    public function test_collection_payment_cannot_exceed_loan_balance(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $user = User::firstOrFail();
+        $stop = CollectionRoute::with('stops')->firstOrFail()->stops->where('status', 'pending')->firstOrFail();
+        $loan = Loan::where('client_id', $stop->client_id)->firstOrFail();
+
+        $this->actingAs($user)->post(route('collections.store', $stop), [
+            'outcome' => 'collected',
+            'loan_id' => $loan->id,
+            'amount' => bcadd($loan->outstanding_balance, '1.00', 2),
+            'payment_method' => 'cash',
+        ])->assertSessionHasErrors('amount');
+
+        $this->assertDatabaseCount('payments', 0);
         $this->assertDatabaseCount('collection_records', 0);
     }
 }

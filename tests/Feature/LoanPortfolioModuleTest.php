@@ -39,7 +39,10 @@ class LoanPortfolioModuleTest extends TestCase
         $this->get(route('loans.show', $loan))->assertOk()
             ->assertSee($loan->application->number)
             ->assertSee('Cuotas')
-            ->assertSee('Ver cliente');
+            ->assertSee('Ver cliente')
+            ->assertSee('Ver pagos y próximas fechas')
+            ->assertSee('Historial de pagos')
+            ->assertSee('Próximos pagos');
     }
 
     public function test_credit_status_can_change_without_marking_a_balance_as_paid(): void

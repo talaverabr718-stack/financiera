@@ -20,7 +20,7 @@ class ClientModuleSeeder extends Seeder
     public function run(): void
     {
         $admin = User::updateOrCreate(['email' => 'admin@financiera.test'], ['name' => 'Administrador', 'password' => 'password']);
-        $product = CreditProduct::updateOrCreate(['code' => 'MICRO-01'], ['name' => 'Microcrédito comercial', 'currency' => 'NIO', 'allowed_frequencies' => ['weekly', 'biweekly', 'monthly'], 'allowed_interest_methods' => ['flat', 'declining_balance', 'french'], 'payment_allocation_order' => null, 'minimum_term' => 4, 'maximum_term' => 60, 'is_active' => true]);
+        $product = CreditProduct::updateOrCreate(['code' => 'MICRO-01'], ['name' => 'Microcrédito comercial', 'currency' => 'NIO', 'allowed_frequencies' => ['weekly', 'biweekly', 'monthly'], 'allowed_interest_methods' => ['flat', 'declining_balance', 'french'], 'payment_allocation_order' => ['delinquency', 'fees', 'interest', 'principal'], 'minimum_term' => 4, 'maximum_term' => 60, 'is_active' => true]);
         $branch = Branch::firstOrCreate(['code' => 'EST-01'], ['name' => 'Oficina Central Estelí', 'address' => 'Estelí']);
         $zone = Zone::firstOrCreate(['code' => 'EST-CEN'], ['branch_id' => $branch->id, 'name' => 'Estelí Centro']);
         $sellers = collect(['Carlos Ruiz', 'Diana Mena', 'Ana López'])->map(function ($name, $index) use ($branch, $zone) {

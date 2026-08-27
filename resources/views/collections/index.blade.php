@@ -94,6 +94,12 @@
                         {{$payment->outcome === 'collected' && $payment->amount ? 'C$ '.number_format((float)$payment->amount,2) : '—'}}
                     </td>
                     <td class="table-cell whitespace-normal min-w-40">
+                        @if($payment->outcome === 'collected' && $payment->payment)
+                            <p class="text-xs font-semibold text-indigo-600">{{$payment->payment->receipt_number}}</p>
+                            @if($payment->loan)
+                                <p class="text-[10px]"><a href="{{route('loans.show', $payment->loan)}}" class="text-indigo-500">Ver en cartera</a></p>
+                            @endif
+                        @endif
                         @if($payment->outcome === 'collected' && $payment->payment_method)
                             <p class="text-xs">{{$methodLabels[$payment->payment_method] ?? $payment->payment_method}}</p>
                         @elseif($payment->outcome === 'promise' && $payment->promise_date)
@@ -101,7 +107,7 @@
                         @endif
                         @if($payment->notes)
                             <p class="text-[10px] text-slate-400">{{$payment->notes}}</p>
-                        @elseif(! ($payment->outcome === 'collected' && $payment->payment_method) && ! ($payment->outcome === 'promise' && $payment->promise_date))
+                        @elseif(! $payment->payment && ! ($payment->outcome === 'collected' && $payment->payment_method) && ! ($payment->outcome === 'promise' && $payment->promise_date))
                             <p class="text-xs text-slate-400">—</p>
                         @endif
                     </td>

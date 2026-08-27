@@ -7,6 +7,7 @@ use App\Models\CollectionRoute;
 use App\Models\CollectionRouteStop;
 use App\Models\Loan;
 use App\Models\LoanInstallment;
+use App\Services\PaymentApplicationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -23,7 +24,7 @@ class CollectionController extends Controller
             ->where('outcome', 'collected')
             ->whereDate('recorded_at', $date)
             ->sum('amount');
-        $paymentHistory = CollectionRecord::with(['client', 'loan', 'collector.user', 'recordedBy', 'stop.route'])
+        $paymentHistory = CollectionRecord::with(['client', 'loan', 'payment', 'collector.user', 'recordedBy', 'stop.route'])
             ->when($request->filled('client'), fn ($q) => $q->where('client_id', $request->integer('client')))
             ->when($request->filled('route'), fn ($q) => $q->whereHas('stop', fn ($q) => $q->where('collection_route_id', $request->integer('route'))))
             ->when($request->filled('collector'), fn ($q) => $q->where('collector_id', $request->integer('collector')))
@@ -60,9 +61,9 @@ class CollectionController extends Controller
         return view('collections.index', compact('date', 'routes', 'collectedToday', 'paymentHistory', 'upcomingVisits', 'upcomingStops', 'pendingStops', 'lateCollections', 'lateInstallments', 'selectedRoute'));
     }
 
-    public function store(Request $request, CollectionRouteStop $stop)
+    public function store(Request $request, CollectionRouteStop $stop, PaymentApplicationService $payments)
     {
-        $stop->load('route');
+        $stop->load('route.collector');
         $data = $request->validate([
             'outcome' => ['required', Rule::in(['collected', 'promise', 'no_payment', 'not_found'])],
             'loan_id' => [
@@ -84,17 +85,24 @@ class CollectionController extends Controller
             'payment_method.required_if' => 'Selecciona la forma de pago.',
         ]);
 
-        DB::transaction(function () use ($data, $stop): void {
-            CollectionRecord::create($data + [
+        DB::transaction(function () use ($data, $stop, $payments): void {
+            $record = CollectionRecord::create($data + [
                 'idempotency_key' => (string) Str::uuid(),
                 'collection_route_stop_id' => $stop->id,
                 'client_id' => $stop->client_id,
                 'loan_id' => $data['loan_id'] ?? null,
                 'collector_id' => $stop->route->collector_id,
+                'currency' => $data['outcome'] === 'collected'
+                    ? (string) (Loan::query()->whereKey($data['loan_id'])->value('currency') ?: 'NIO')
+                    : 'NIO',
                 'application_status' => $data['outcome'] === 'collected' ? 'pending' : 'not_applicable',
                 'recorded_at' => now(),
                 'recorded_by' => auth()->id(),
             ]);
+
+            if ($data['outcome'] === 'collected') {
+                $payments->applyCollection($record->load('collector'));
+            }
 
             $stop->update([
                 'status' => match ($data['outcome']) {
@@ -115,6 +123,8 @@ class CollectionController extends Controller
             }
         });
 
-        return back()->with('success', 'Gestión de cobranza registrada y ruta actualizada.');
+        return back()->with('success', $data['outcome'] === 'collected'
+            ? 'Cobro aplicado a cartera y ruta actualizada.'
+            : 'Gestión de cobranza registrada y ruta actualizada.');
     }
 }
