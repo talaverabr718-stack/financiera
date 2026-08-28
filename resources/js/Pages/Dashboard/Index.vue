@@ -3,6 +3,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import AppLayout from '../../Layouts/AppLayout.vue';
 import GoogleServiceMap from '../../components/dashboard/GoogleServiceMap.vue';
+import DailyReportModal from '../../components/dashboard/DailyReportModal.vue';
 
 const props = defineProps({
     stats: { type: Object, default: () => ({}) },
@@ -19,6 +20,7 @@ const props = defineProps({
     paymentMix: { type: Array, default: () => [] },
     neighborhoods: { type: Array, default: () => [] },
     promisesToday: { type: Array, default: () => [] },
+    dailyReport: { type: Object, default: () => ({ visits: 0, payments: 0, collected: '0.00', routes: [], other_payments: [] }) },
     closing: { type: Object, default: () => ({ opens_at: '08:00', closes_at: '17:00' }) },
     portfolioTrend: { type: Array, default: () => [] },
     collectionTrend: { type: Array, default: () => [] },
@@ -29,11 +31,14 @@ const props = defineProps({
 
 const clock = ref(props.briefing.time_label || '');
 const closeState = ref({ percent: 0, remaining: '', phase: 'open' });
+const reportOpen = ref(false);
 const ring = 226;
 let timer;
 let poll;
 
 onMounted(() => {
+    document.documentElement.classList.remove('is-printing-daily-report');
+    if (window.location.hash === '#reportes-del-dia') reportOpen.value = true;
     const tick = () => {
         clock.value = new Intl.DateTimeFormat('es-NI', {
             hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'America/Managua',
@@ -63,7 +68,7 @@ onMounted(() => {
     timer = setInterval(tick, 1000);
     poll = setInterval(() => {
         router.reload({
-            only: ['fieldActivity', 'till', 'stats', 'paymentMix', 'todayStops', 'promisesToday', 'collectorActivity'],
+            only: ['fieldActivity', 'till', 'stats', 'paymentMix', 'todayStops', 'promisesToday', 'collectorActivity', 'dailyReport', 'briefing'],
             preserveScroll: true,
             preserveState: true,
         });
@@ -136,6 +141,20 @@ const tickerItems = computed(() => {
 });
 const changePeriod = value => router.get('/', { period: value }, { preserveState: true, preserveScroll: true, replace: true });
 const methodLabel = value => ({ cash: 'Efectivo', transfer: 'Transferencia', deposit: 'Depósito' }[value] || value || 'Pago');
+const isDailyReport = action => {
+    const url = String(action?.url || '');
+    const label = String(action?.label || '').toLowerCase();
+    return action?.opens === 'daily-report'
+        || url.includes('reportes-del-dia')
+        || label.includes('reportes del día')
+        || label.includes('reportes del dia');
+};
+const openDailyReport = event => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    reportOpen.value = true;
+};
+const closeDailyReport = () => { reportOpen.value = false; };
 </script>
 
 <template>
@@ -152,10 +171,27 @@ const methodLabel = value => ({ cash: 'Efectivo', transfer: 'Transferencia', dep
                     <h1>{{ briefing.greeting }}, {{ briefing.first_name }}.</h1>
                     <p class="mesa-situation">{{ briefing.situation }}</p>
                     <div class="mesa-actions">
-                        <Link v-for="action in briefing.actions" :key="action.label" :href="action.url" class="mesa-action" :data-tone="action.tone">
-                            <strong>{{ action.label }}</strong>
-                            <small>{{ action.hint }}</small>
-                        </Link>
+                        <template v-for="action in briefing.actions || []" :key="action.label">
+                            <button
+                                v-if="isDailyReport(action)"
+                                type="button"
+                                class="mesa-action"
+                                :data-tone="action.tone"
+                                @click.stop.prevent="openDailyReport"
+                            >
+                                <strong>{{ action.label }}</strong>
+                                <small>{{ action.hint }}</small>
+                            </button>
+                            <Link
+                                v-else
+                                :href="action.url"
+                                class="mesa-action"
+                                :data-tone="action.tone"
+                            >
+                                <strong>{{ action.label }}</strong>
+                                <small>{{ action.hint }}</small>
+                            </Link>
+                        </template>
                     </div>
                 </div>
                 <aside class="mesa-pulse">
@@ -467,4 +503,5 @@ const methodLabel = value => ({ cash: 'Efectivo', transfer: 'Transferencia', dep
             </section>
         </div>
     </AppLayout>
+    <DailyReportModal v-if="reportOpen" :open="true" :report="dailyReport || {}" :links="links" @close="closeDailyReport"/>
 </template>
