@@ -219,7 +219,7 @@ class CollectionRouteModuleTest extends TestCase
         $this->seed(ClientModuleSeeder::class);
         $user = User::firstOrFail();
         $route = CollectionRoute::with('stops')->firstOrFail();
-        $managedStop = $route->stops->first();
+        $managedStop = $route->stops->firstWhere('status', 'pending') ?? $route->stops->first();
         $remainingIds = $route->stops->where('id', '!=', $managedStop->id)->pluck('client_id')->all();
 
         $this->actingAs($user)->post(route('collections.store', $managedStop), [

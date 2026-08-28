@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class CollectionController extends Controller
@@ -58,6 +59,7 @@ class CollectionController extends Controller
             ->values();
         $lateCollections = $lateInstallments->count();
         $selectedRoute = $routes->firstWhere('id', $request->integer('agenda_route')) ?? $routes->first();
+        $routes->each(fn (CollectionRoute $route) => $route->withCollectorDues($date));
 
         return Inertia::render('Collections/Index', compact('date', 'routes', 'collectedToday', 'paymentHistory', 'upcomingVisits', 'upcomingStops', 'pendingStops', 'lateCollections', 'lateInstallments', 'selectedRoute') + ['storeTemplate' => route('collections.store',['stop'=>'__STOP__'])]);
     }
@@ -87,6 +89,14 @@ class CollectionController extends Controller
         ]);
 
         DB::transaction(function () use ($data, $stop, $payments): void {
+            $stop = CollectionRouteStop::query()->with('route.collector')->lockForUpdate()->findOrFail($stop->id);
+
+            if ($stop->status !== 'pending') {
+                throw ValidationException::withMessages([
+                    'outcome' => 'Esta visita ya tiene una gestión registrada.',
+                ]);
+            }
+
             $record = CollectionRecord::create($data + [
                 'idempotency_key' => (string) Str::uuid(),
                 'collection_route_stop_id' => $stop->id,

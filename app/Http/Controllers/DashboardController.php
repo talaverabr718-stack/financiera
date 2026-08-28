@@ -248,6 +248,7 @@ class DashboardController extends Controller
 
         $collectorActivity = $this->collectorBoard();
         $paymentMix = $this->paymentMix();
+        $dailyReport = $this->dailyReport();
         $neighborhoods = $this->neighborhoods($todayStops, $overdueInstallments);
         $promisesToday = CollectionRecord::with(['client', 'collector.user'])
             ->where('outcome', 'promise')
@@ -284,7 +285,8 @@ class DashboardController extends Controller
 
         return Inertia::render('Dashboard/Index', [
             'stats' => $stats,
-            'briefing' => $this->briefing($now, $stats, $expectedToday, $pendingStops, $links),
+            'briefing' => $this->briefing($now, $stats, $expectedToday, $pendingStops, $links, $dailyReport),
+            'dailyReport' => $dailyReport,
             'till' => [
                 'collected' => $stats['collectedToday'],
                 'expected' => $expectedToday,
@@ -324,7 +326,7 @@ class DashboardController extends Controller
         ]);
     }
 
-    private function briefing($now, array $stats, string $expectedToday, int $pendingStops, array $links): array
+    private function briefing($now, array $stats, string $expectedToday, int $pendingStops, array $links, array $dailyReport): array
     {
         $hour = (int) $now->format('G');
         $greeting = $hour < 12 ? 'Buenos días' : ($hour < 19 ? 'Buenas tardes' : 'Buenas noches');
@@ -341,7 +343,15 @@ class DashboardController extends Controller
             $situation = "Aún no hay recaudo. {$pendingStops} visitas en campo y {$stats['pendingApplications']} solicitudes por decidir.";
         }
 
-        $actions = collect();
+        $actions = collect([
+            [
+                'label' => 'Reportes del día',
+                'hint' => $dailyReport['visits'].' visitas · '.$dailyReport['payments'].' pagos',
+                'url' => '#reportes-del-dia',
+                'opens' => 'daily-report',
+                'tone' => 'emerald',
+            ],
+        ]);
         if ($pendingStops > 0) {
             $actions->push(['label' => "{$pendingStops} visitas pendientes", 'hint' => 'Seguir la ruta de hoy', 'url' => $links['collections'], 'tone' => 'gold']);
         }
@@ -351,13 +361,13 @@ class DashboardController extends Controller
         if ($stats['pendingApplications'] > 0) {
             $actions->push(['label' => "{$stats['pendingApplications']} solicitudes por decidir", 'hint' => 'Cola de originación', 'url' => $links['applications'], 'tone' => 'blue']);
         }
-        if ($actions->count() < 3) {
+        if ($actions->count() < 4) {
             $actions->push(['label' => 'Nueva solicitud', 'hint' => 'Abrir evaluación crediticia', 'url' => $links['newApplication'], 'tone' => 'navy']);
         }
-        if ($actions->count() < 3) {
+        if ($actions->count() < 4) {
             $actions->push(['label' => 'Registrar cliente', 'hint' => 'Nuevo expediente', 'url' => $links['newClient'], 'tone' => 'navy']);
         }
-        if ($actions->count() < 3) {
+        if ($actions->count() < 4) {
             $actions->push(['label' => 'Planificar rutas', 'hint' => 'Organizar el territorio', 'url' => $links['routes'], 'tone' => 'navy']);
         }
 
@@ -367,8 +377,140 @@ class DashboardController extends Controller
             'date_label' => $now->isoFormat('dddd D [de] MMMM'),
             'time_label' => $now->format('H:i'),
             'situation' => $situation,
-            'actions' => $actions->take(3)->values(),
+            'actions' => $actions->take(4)->values(),
         ];
+    }
+
+    private function dailyReport(): array
+    {
+        $usedPaymentIds = collect();
+        $routes = CollectionRoute::query()
+            ->with([
+                'collector.user',
+                'stops.client',
+                'stops.records.payment.allocations.installment',
+                'stops.records.loan',
+                'stops.records.collector.user',
+                'stops.records.recordedBy',
+            ])
+            ->whereDate('scheduled_date', today())
+            ->orderBy('starts_at')
+            ->get();
+
+        $reportRoutes = $routes->map(function (CollectionRoute $route) use ($usedPaymentIds) {
+            $visits = $route->stops
+                ->filter(fn (CollectionRouteStop $stop) => $stop->status !== 'pending')
+                ->sortBy('position')
+                ->values()
+                ->map(function (CollectionRouteStop $stop) use ($route, $usedPaymentIds) {
+                    $record = $stop->records->first();
+                    $payments = $stop->records
+                        ->filter(fn (CollectionRecord $item) => $item->payment)
+                        ->map(function (CollectionRecord $item) use ($usedPaymentIds) {
+                            $usedPaymentIds->push($item->payment_id);
+
+                            return $this->paymentReport($item->payment, $item->collector?->user?->name ?: $item->recordedBy?->name);
+                        })
+                        ->values();
+
+                    return [
+                        'id' => $stop->id,
+                        'client' => $stop->client?->full_name,
+                        'client_url' => $stop->client ? route('clients.show', $stop->client) : null,
+                        'place' => $stop->client?->neighborhood ?: $stop->client?->municipality,
+                        'status' => $stop->status,
+                        'status_label' => $this->stopLabel($stop->status),
+                        'visited_at' => $stop->visitedAtLabel(),
+                        'visitor' => $record?->collector?->user?->name
+                            ?: $record?->recordedBy?->name
+                            ?: $route->collector?->user?->name,
+                        'outcome' => $record?->outcome,
+                        'outcome_label' => $this->outcomeLabel($record?->outcome),
+                        'payments' => $payments,
+                    ];
+                });
+
+            return [
+                'id' => $route->id,
+                'name' => $route->name,
+                'code' => $route->code,
+                'collector' => $route->collector?->user?->name,
+                'visits' => $visits,
+            ];
+        })->values();
+
+        $otherPayments = Payment::query()
+            ->with(['client', 'loan', 'allocations.installment', 'collector'])
+            ->where('status', 'applied')
+            ->whereDate('received_at', today())
+            ->when($usedPaymentIds->filter()->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $usedPaymentIds->filter()->unique()->all()))
+            ->latest('received_at')
+            ->get()
+            ->map(fn (Payment $payment) => $this->paymentReport($payment, $payment->collector?->name))
+            ->values();
+
+        $routePayments = $reportRoutes->flatMap(fn (array $route) => collect($route['visits'])->flatMap(fn (array $visit) => $visit['payments']));
+        $allPayments = $routePayments->concat($otherPayments);
+
+        return [
+            'visits' => $reportRoutes->sum(fn (array $route) => count($route['visits'])),
+            'payments' => $allPayments->count(),
+            'collected' => $allPayments->reduce(fn (string $total, array $payment) => bcadd($total, (string) $payment['amount'], 2), '0.00'),
+            'routes' => $reportRoutes,
+            'other_payments' => $otherPayments,
+        ];
+    }
+
+    private function paymentReport(Payment $payment, ?string $visitor = null): array
+    {
+        $payment->loadMissing(['client', 'loan', 'allocations.installment', 'collector']);
+        $loanBalance = $payment->loan?->outstanding_balance ?? (string) $payment->new_balance;
+        $installments = $payment->allocations
+            ->groupBy('installment_id')
+            ->values()
+            ->map(function ($rows) {
+                $installment = $rows->first()?->installment;
+                $applied = $rows->reduce(fn (string $total, $row) => bcadd($total, (string) $row->amount, 2), '0.00');
+                $remaining = $installment?->outstandingAmount() ?? '0.00';
+
+                return [
+                    'id' => $installment?->id,
+                    'number' => $installment?->number,
+                    'due_date' => $installment?->due_date?->toDateString(),
+                    'applied' => $applied,
+                    'remaining' => $remaining,
+                    'settled' => bccomp($remaining, '0.00', 2) === 0,
+                ];
+            });
+
+        return [
+            'id' => $payment->id,
+            'receipt_number' => $payment->receipt_number,
+            'amount' => $payment->amount,
+            'method' => $payment->payment_method,
+            'time' => $payment->received_at?->timezone(config('app.timezone'))->format('H:i'),
+            'previous_balance' => $payment->previous_balance,
+            'new_balance' => $payment->new_balance,
+            'loan_number' => $payment->loan?->number,
+            'loan_url' => $payment->loan ? route('loans.show', $payment->loan) : null,
+            'loan_balance' => $loanBalance,
+            'has_balance' => bccomp((string) $loanBalance, '0.00', 2) === 1,
+            'installments' => $installments,
+            'client' => $payment->client?->full_name,
+            'client_url' => $payment->client ? route('clients.show', $payment->client) : null,
+            'visitor' => $visitor ?: $payment->collector?->name,
+        ];
+    }
+
+    private function outcomeLabel(?string $outcome): ?string
+    {
+        return match ($outcome) {
+            'collected' => 'Cobrado',
+            'promise' => 'Promesa',
+            'no_payment' => 'Sin pago',
+            'not_found' => 'No hallado',
+            default => $outcome,
+        };
     }
 
     private function collectorBoard(): \Illuminate\Support\Collection
@@ -506,6 +648,7 @@ class DashboardController extends Controller
             'paymentMix' => [],
             'neighborhoods' => [],
             'promisesToday' => [],
+            'dailyReport' => ['visits' => 0, 'payments' => 0, 'collected' => '0.00', 'routes' => [], 'other_payments' => []],
             'closing' => ['opens_at' => '08:00', 'closes_at' => '17:00', 'label' => 'Cierre de caja 17:00'],
             'portfolioTrend' => [],
             'collectionTrend' => [],
