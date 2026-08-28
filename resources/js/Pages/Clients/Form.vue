@@ -6,11 +6,18 @@ import BaseModal from '../../components/ui/BaseModal.vue';
 import AppLayout from '../../Layouts/AppLayout.vue';
 
 const props = defineProps({ client: Object, sellers: Array, locations: Object, endpoints: Object, editing: Boolean });
-const steps = [['Datos básicos'], ['Economía'], ['Bienes'], ['Observaciones']];
+const steps = [['Datos básicos'], ['Datos Económicos'], ['Bienes'], ['Observaciones']];
 const assetTypes = { jewelry: 'Prenda / joya', vehicle: 'Vehículo', property: 'Propiedad', appliance: 'Electrodoméstico', machinery: 'Maquinaria', livestock: 'Ganado', inventory: 'Inventario', other: 'Otro' };
 const housing = { owned: 'Propia', rented: 'Alquilada', family: 'Familiar', financed: 'Financiada', other: 'Otra' };
 const step = ref(1);
 const reviewOpen = ref(false);
+const storedEmploymentDuration = Number(props.client.employment_duration_months ?? 0);
+const employmentDurationUnit = ref(storedEmploymentDuration > 0 && storedEmploymentDuration % 12 === 0 ? 'years' : 'months');
+const employmentDurationValue = ref(
+    storedEmploymentDuration > 0
+        ? (employmentDurationUnit.value === 'years' ? storedEmploymentDuration / 12 : storedEmploymentDuration)
+        : '',
+);
 const form = useForm({
     full_name: props.client.full_name ?? '',
     identity_number: props.client.identity_number ?? '',
@@ -85,6 +92,11 @@ const onIdentityKeydown = event => {
 
 watch(() => form.department, () => { form.municipality = municipalities.value[0] ?? ''; form.neighborhood = neighborhoods.value[0] ?? ''; });
 watch(() => form.municipality, () => { if (!neighborhoods.value.includes(form.neighborhood)) form.neighborhood = neighborhoods.value[0] ?? ''; });
+watch([employmentDurationValue, employmentDurationUnit], ([value, unit]) => {
+    form.employment_duration_months = value === '' || value === null
+        ? ''
+        : Number(value) * (unit === 'years' ? 12 : 1);
+}, { immediate: true });
 
 const addAsset = () => form.assets.push({ type: 'jewelry', description: '', estimated_value: '', ownership_status: 'owned' });
 const removeAsset = index => form.assets.splice(index, 1);
@@ -125,11 +137,20 @@ const submit = () => form.transform(data => ({ ...data, assets: data.assets.filt
             <section v-show="step === 2" class="card p-5">
                 <h2 class="text-sm font-semibold">Trabajo y capacidad económica</h2>
                 <div class="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    <label class="field-label">Actividad económica<input v-model="form.economic_activity" class="control"></label>
+                    <label class="field-label">Ocupación<input v-model="form.economic_activity" class="control"></label>
                     <label class="field-label">Empresa, trabajo o negocio<input v-model="form.workplace" class="control"></label>
                     <label class="field-label">Cargo u ocupación<input v-model="form.job_position" class="control"></label>
                     <label class="field-label lg:col-span-2">Dirección del trabajo o negocio<input v-model="form.workplace_address" class="control"></label>
-                    <label class="field-label">Antigüedad laboral (meses)<input v-model="form.employment_duration_months" type="number" min="0" class="control"></label>
+                    <div class="field-label">
+                        <span>Antigüedad laboral</span>
+                        <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                            <input v-model.number="employmentDurationValue" type="number" min="0" step="1" inputmode="numeric" class="control" placeholder="Cantidad">
+                            <select v-model="employmentDurationUnit" class="control min-w-28" aria-label="Unidad de antigüedad laboral">
+                                <option value="months">Meses</option>
+                                <option value="years">Años</option>
+                            </select>
+                        </div>
+                    </div>
                     <label class="field-label">Ingresos mensuales *<input v-model="form.estimated_income" type="number" step="0.01" min="0" class="control" required></label>
                     <label class="field-label">Otros ingresos<input v-model="form.other_income" type="number" step="0.01" min="0" class="control"></label>
                     <label class="field-label">Gastos mensuales *<input v-model="form.estimated_expenses" type="number" step="0.01" min="0" class="control" required></label>
