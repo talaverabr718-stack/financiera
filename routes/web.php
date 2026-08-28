@@ -21,6 +21,7 @@ use App\Http\Controllers\LoanDisbursementController;
 use App\Http\Controllers\LoanPortfolioController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\SettingsUserController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -90,6 +91,10 @@ Route::middleware('auth')->group(function () {
         Route::put('/modulos', [SettingsController::class, 'updateModules'])->name('modules.update');
         Route::get('/permisos', [SettingsController::class, 'permissions'])->name('permissions');
         Route::put('/permisos', [SettingsController::class, 'updatePermissions'])->name('permissions.update');
+        Route::get('/usuarios', [SettingsUserController::class, 'index'])->name('users');
+        Route::post('/usuarios', [SettingsUserController::class, 'store'])->name('users.store');
+        Route::put('/usuarios/{user}', [SettingsUserController::class, 'update'])->name('users.update');
+        Route::patch('/usuarios/{user}/estado', [SettingsUserController::class, 'status'])->name('users.status');
         Route::get('/apariencia', [SettingsController::class, 'appearance'])->name('appearance');
         Route::put('/apariencia', [SettingsController::class, 'updateAppearance'])->name('appearance.update');
         Route::get('/marca', [SettingsController::class, 'brand'])->name('brand');

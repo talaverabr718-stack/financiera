@@ -63,12 +63,12 @@ class FinancialReportService
     public function row(string $type, $item): array
     {
         return match ($type) {
-            'portfolio' => [$item->number, $item->disbursed_at?->format('d/m/Y'), $item->client->full_name, $item->application->product->name, $item->seller->user->name, $item->principal, $item->outstanding_balance, $item->status],
-            'collections' => [$item->recorded_at->format('d/m/Y H:i'), $item->client->full_name, $item->loan?->number, $item->stop->route->name, $item->collector->user->name, $item->outcome, $item->amount, $item->application_status],
-            'applications' => [$item->number, $item->created_at->format('d/m/Y'), $item->client->full_name, $item->product->name, $item->seller->user->name, $item->requested_amount, $item->approved_amount, $item->status],
+            'portfolio' => [$item->number, $item->disbursed_at?->format('d/m/Y'), $item->client->full_name, $item->application->product->name, $item->seller->display_name, $item->principal, $item->outstanding_balance, $item->status],
+            'collections' => [$item->recorded_at->format('d/m/Y H:i'), $item->client->full_name, $item->loan?->number, $item->stop->route->name, $item->collector->display_name, $item->outcome, $item->amount, $item->application_status],
+            'applications' => [$item->number, $item->created_at->format('d/m/Y'), $item->client->full_name, $item->product->name, $item->seller->display_name, $item->requested_amount, $item->approved_amount, $item->status],
             'disbursements' => [$item->number, $item->disbursed_at->format('d/m/Y'), $item->application->client->full_name, $item->loan->number, $item->payment_method, $item->reference, $item->amount, $item->disbursedBy->name],
-            'routes' => [$item->name, $item->scheduled_date->format('d/m/Y'), $item->collector->user->name, $item->stops_count, $item->status, $item->starts_at, $item->code],
-            'accounting' => [$item->number, $item->date->format('d/m/Y'), $item->concept, $item->reference, $item->total_debit, $item->total_credit, $item->status, $item->user->name],
+            'routes' => [$item->name, $item->scheduled_date->format('d/m/Y'), $item->collector->display_name, $item->stops_count, $item->status, $item->starts_at, $item->code],
+            'accounting' => [$item->number, $item->date->format('d/m/Y'), $item->concept, $item->reference, $item->total_debit, $item->total_credit, $item->status, $item->display_name],
         };
     }
 }

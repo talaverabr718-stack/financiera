@@ -3,34 +3,38 @@
 namespace App\Services;
 
 use App\Models\SellerProfile;
-use App\Models\User;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
 class CollaboratorService
 {
+    public function __construct(private DocumentSequenceService $sequences) {}
+
     public function create(array $data): SellerProfile
     {
-        return DB::transaction(function () use ($data) {
-            $user = User::create(Arr::only($data, ['name', 'email', 'password']));
-
-            return SellerProfile::create(Arr::only($data, ['branch_id', 'zone_id', 'code', 'identity_number', 'phone', 'hired_at', 'capabilities', 'notes', 'status']) + ['user_id' => $user->id]);
-        });
+        return DB::transaction(fn () => SellerProfile::create([
+            'full_name' => $data['name'],
+            'email' => $data['email'] ?? null,
+            'identity_number' => $data['identity_number'] ?? null,
+            'phone' => $data['phone'] ?? null,
+            'branch_id' => $data['branch_id'],
+            'code' => $this->sequences->next('collaborator', 'COL-'),
+            'status' => 'active',
+        ]));
     }
 
     public function update(SellerProfile $collaborator, array $data): SellerProfile
     {
         return DB::transaction(function () use ($collaborator, $data) {
             $locked = SellerProfile::lockForUpdate()->findOrFail($collaborator->id);
-            $user = User::lockForUpdate()->findOrFail($locked->user_id);
-            $userData = Arr::only($data, ['name', 'email']);
-            if (! empty($data['password'])) {
-                $userData['password'] = $data['password'];
-            }
-            $user->update($userData);
-            $locked->update(Arr::only($data, ['branch_id', 'zone_id', 'code', 'identity_number', 'phone', 'hired_at', 'capabilities', 'notes', 'status']));
+            $locked->update([
+                'full_name' => $data['name'],
+                'email' => $data['email'] ?? null,
+                'identity_number' => $data['identity_number'] ?? null,
+                'phone' => $data['phone'] ?? null,
+                'branch_id' => $data['branch_id'],
+            ]);
 
-            return $locked->fresh(['user', 'branch', 'zone']);
+            return $locked->fresh(['user', 'branch']);
         });
     }
 

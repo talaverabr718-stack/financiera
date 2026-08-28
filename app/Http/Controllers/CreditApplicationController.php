@@ -76,7 +76,7 @@ class CreditApplicationController extends Controller
                 ...$application->only(['id', 'number', 'status', 'requested_amount', 'approved_amount', 'currency', 'purpose', 'applied_on', 'term', 'installment_amount', 'payment_frequency', 'interest_rate', 'interest_method', 'requires_guarantor', 'decision_reason']),
                 'client_name' => $application->client->full_name,
                 'product_name' => $application->product->name,
-                'seller_name' => $application->seller->user->name,
+                'seller_name' => $application->seller->display_name,
                 'applied_on' => $application->applied_on?->toDateString(),
                 'proposed_first_payment_date' => $application->proposed_first_payment_date?->toDateString(),
                 'approved_at' => $application->approved_at?->toISOString(),

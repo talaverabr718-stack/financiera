@@ -25,7 +25,7 @@ const openClient = row => router.get(props.endpoints.index, { ...filters, client
         <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
             <div class="space-y-4">
                 <ResourceToolbar v-model="filters.search" v-model:status="filters.status" :statuses="[{value:'active',label:'Activos'},{value:'inactive',label:'Inactivos'}]" placeholder="Nombre, código, cédula o teléfono…" @clear="clear">
-                    <select v-model="filters.seller" class="control sm:w-48"><option value="">Todos los vendedores</option><option v-for="seller in sellers" :key="seller.id" :value="seller.id">{{ seller.user?.name }}</option></select>
+                    <select v-model="filters.seller" class="control sm:w-48"><option value="">Todos los vendedores</option><option v-for="seller in sellers" :key="seller.id" :value="seller.id">{{ seller.display_name }}</option></select>
                 </ResourceToolbar>
                 <DataTable :columns="columns" :rows="clients.data" empty="No se encontraron clientes." @row="openClient">
                     <template #cell-full_name="{ row }">

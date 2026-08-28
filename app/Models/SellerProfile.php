@@ -12,7 +12,9 @@ class SellerProfile extends Model
         'collections' => 'Realizar cobros en ruta',
     ];
 
-    protected $fillable = ['user_id', 'branch_id', 'zone_id', 'code', 'identity_number', 'phone', 'hired_at', 'capabilities', 'notes', 'status'];
+    protected $fillable = ['user_id', 'branch_id', 'zone_id', 'code', 'full_name', 'email', 'identity_number', 'phone', 'hired_at', 'capabilities', 'notes', 'status'];
+
+    protected $appends = ['display_name', 'display_email'];
 
     protected function casts(): array
     {
@@ -24,6 +26,15 @@ class SellerProfile extends Model
         return in_array($capability, $this->capabilities ?? [], true);
     }
 
+    public function getDisplayNameAttribute(): string
+    {
+        return $this->full_name ?: $this->user?->name ?: $this->code ?: '';
+    }
+
+    public function getDisplayEmailAttribute(): ?string
+    {
+        return $this->email ?: $this->user?->email;
+    }
     protected static function booted(): void
     {
         static::creating(function (SellerProfile $profile): void {

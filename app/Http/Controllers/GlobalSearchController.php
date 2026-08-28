@@ -20,7 +20,7 @@ class GlobalSearchController extends Controller
                 ->concat(Client::where(fn ($q) => $q->where('full_name', 'like', "%{$term}%")->orWhere('identity_number', 'like', "%{$term}%")->orWhere('code', 'like', "%{$term}%"))->take(8)->get()->map(fn ($item) => ['type' => 'Cliente', 'title' => $item->full_name, 'meta' => $item->code, 'url' => route('clients.show', $item)]))
                 ->concat(Loan::with('client')->where('number', 'like', "%{$term}%")->take(8)->get()->map(fn ($item) => ['type' => 'Crédito', 'title' => $item->number, 'meta' => $item->client->full_name, 'url' => route('loans.show', $item)]))
                 ->concat(CreditApplication::with('client')->where('number', 'like', "%{$term}%")->take(8)->get()->map(fn ($item) => ['type' => 'Solicitud', 'title' => $item->number, 'meta' => $item->client->full_name, 'url' => route('applications.show', $item)]))
-                ->concat(SellerProfile::with('user')->whereHas('user', fn ($q) => $q->where('name', 'like', "%{$term}%"))->take(8)->get()->map(fn ($item) => ['type' => 'Colaborador', 'title' => $item->user->name, 'meta' => $item->code, 'url' => route('collaborators.show', $item)]));
+                ->concat(SellerProfile::with('user')->where(fn ($q) => $q->where('full_name', 'like', "%{$term}%")->orWhereHas('user', fn ($q) => $q->where('name', 'like', "%{$term}%")))->take(8)->get()->map(fn ($item) => ['type' => 'Colaborador', 'title' => $item->display_name, 'meta' => $item->code, 'url' => route('collaborators.show', $item)]));
         }
 
         return Inertia::render('Search/Index', compact('term', 'results'));

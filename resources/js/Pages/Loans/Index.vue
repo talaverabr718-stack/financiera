@@ -23,7 +23,7 @@ const statusTone = value => ({ active: 'bg-emerald-50 text-emerald-700', delinqu
         </div>
         <div class="mt-4 space-y-4">
             <ResourceToolbar v-model="filters.search" v-model:status="filters.status" :statuses="Object.entries(statusLabels).map(([value,label])=>({value,label}))" placeholder="Crédito, cliente o identificación…" @clear="clear">
-                <select v-model="filters.seller" class="control sm:w-48"><option value="">Todos los vendedores</option><option v-for="seller in sellers" :key="seller.id" :value="seller.id">{{ seller.user?.name }}</option></select>
+                <select v-model="filters.seller" class="control sm:w-48"><option value="">Todos los vendedores</option><option v-for="seller in sellers" :key="seller.id" :value="seller.id">{{ seller.display_name }}</option></select>
             </ResourceToolbar>
             <DataTable :columns="columns" :rows="loans.data" empty="No hay créditos con esos filtros." @row="row => router.visit(`/cartera/${row.id}`)">
                 <template #cell-client="{ row }"><span class="font-semibold">{{ row.client?.full_name }}</span></template>

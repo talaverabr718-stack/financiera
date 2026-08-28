@@ -157,7 +157,7 @@ const submit = () => form.transform(data => ({ ...data, assets: data.assets.filt
                     <label class="field-label">Vivienda<select v-model="form.housing_status" class="control"><option value="">Seleccionar</option><option v-for="(label, value) in housing" :key="value" :value="value">{{ label }}</option></select></label>
                     <label class="field-label">Personas dependientes<input v-model="form.dependents" type="number" min="0" class="control"></label>
                     <label class="field-label">Estado<select v-model="form.status" class="control"><option value="active">Activo</option><option value="inactive">Inactivo</option><option value="blocked">Bloqueado</option></select></label>
-                    <label v-if="!editing" class="field-label">Vendedor responsable *<select v-model="form.seller_id" name="seller_id" class="control" required><option value="">Seleccionar</option><option v-for="seller in sellers" :key="seller.id" :value="seller.id">{{ seller.user?.name }} · {{ seller.code }}</option></select></label>
+                    <label v-if="!editing" class="field-label">Vendedor responsable *<select v-model="form.seller_id" name="seller_id" class="control" required><option value="">Seleccionar</option><option v-for="seller in sellers" :key="seller.id" :value="seller.id">{{ seller.display_name }} · {{ seller.code }}</option></select></label>
                 </div>
             </section>
             <section v-show="step === 3" class="card overflow-hidden">

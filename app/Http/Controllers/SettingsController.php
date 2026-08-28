@@ -31,6 +31,7 @@ class SettingsController extends Controller
             'brand' => SystemSetting::where('key', 'system_name')->whereNotNull('value')->exists(),
             'modules' => SystemModule::where('is_enabled', false)->doesntExist(),
             'permissions' => DB::table('system_module_user')->exists(),
+            'users' => User::exists(),
             'appearance' => SystemSetting::where('group', 'appearance')->exists(),
             'general' => filled($general['institution_name'] ?? null),
             'financial' => CreditProduct::where('is_active', true)->exists(),
@@ -74,8 +75,8 @@ class SettingsController extends Controller
             'modules' => $modules,
             'permissions' => $permissions,
             'endpoints' => ['update' => route('settings.permissions.update')],
-            'tabs' => collect(['index' => 'Resumen', 'brand' => 'Marca', 'modules' => 'Módulos', 'permissions' => 'Permisos', 'appearance' => 'Apariencia', 'general' => 'Institución', 'financial' => 'Financiera', 'accounting' => 'Contabilidad', 'sequences' => 'Consecutivos'])
-                ->map(fn ($label, $name) => ['label' => $label, 'url' => route('settings.'.$name), 'active' => $name === 'permissions'])->values(),
+            'tabs' => self::tabs('permissions'),
+
         ]);
     }
 
@@ -185,11 +186,16 @@ class SettingsController extends Controller
 
     private function page(string $section, array $props = [])
     {
-        $labels = ['index' => 'Resumen', 'brand' => 'Marca', 'modules' => 'Módulos', 'permissions' => 'Permisos', 'appearance' => 'Apariencia', 'general' => 'Institución', 'financial' => 'Financiera', 'accounting' => 'Contabilidad', 'sequences' => 'Consecutivos'];
-
         return Inertia::render('Settings/Index', $props + [
             'section' => $section,
-            'tabs' => collect($labels)->map(fn ($label, $name) => ['label' => $label, 'url' => route('settings.'.$name), 'active' => $name === $section])->values(),
+            'tabs' => self::tabs($section),
         ]);
+    }
+
+    public static function tabs(string $active)
+    {
+        $labels = ['index' => 'Resumen', 'brand' => 'Marca', 'modules' => 'Módulos', 'users' => 'Usuarios', 'permissions' => 'Permisos', 'appearance' => 'Apariencia', 'general' => 'Institución', 'financial' => 'Financiera', 'accounting' => 'Contabilidad', 'sequences' => 'Consecutivos'];
+
+        return collect($labels)->map(fn ($label, $name) => ['label' => $label, 'url' => route('settings.'.$name), 'active' => $name === $active])->values();
     }
 }

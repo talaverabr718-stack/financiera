@@ -122,6 +122,13 @@ main, main > *, .card, .table-wrap { min-width: 0; }
 .table-wrap { max-width: 100%; overscroll-behavior-inline: contain; }
 .table-wrap table { min-width: max-content; }
 .modal-panel { max-width: calc(100vw - 2rem); max-height: calc(100dvh - 2rem); overflow-y: auto; }
+
+/* Modal compartido por alta y edición de usuarios. El ancho permanece compacto
+   en escritorio y conserva un margen seguro en pantallas pequeñas. */
+.user-access-modal {
+    width: min(22rem, calc(100vw - 1.5rem)) !important;
+    max-width: min(22rem, calc(100vw - 1.5rem)) !important;
+}
 .pay-modal { overflow: hidden; }
 .pay-modal-panel { width: min(32rem, calc(100vw - 1.5rem)); max-height: 100% !important; overflow: hidden !important; }
 .pay-form textarea.pay-notes { min-height: 2.75rem; max-height: 6rem; resize: none; }

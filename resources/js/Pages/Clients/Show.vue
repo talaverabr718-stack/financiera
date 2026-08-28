@@ -75,7 +75,7 @@ const submitTransfer = () => transfer.post(props.endpoints.transfer, { preserveS
                     <p class="mt-4 text-sm font-semibold">{{ client.seller_name || 'Sin asignar' }}</p>
                     <p class="mt-1 text-[11px] text-slate-400">{{ client.seller_code }}</p>
                     <form class="mt-4 space-y-3" @submit.prevent="submitTransfer">
-                        <select v-model="transfer.seller_id" class="w-full rounded-lg border px-3 py-2 text-xs"><option v-for="seller in sellers" :key="seller.id" :value="seller.id">{{ seller.user?.name }}</option></select>
+                        <select v-model="transfer.seller_id" class="w-full rounded-lg border px-3 py-2 text-xs"><option v-for="seller in sellers" :key="seller.id" :value="seller.id">{{ seller.display_name }}</option></select>
                         <textarea v-model="transfer.reason" required rows="2" class="w-full rounded-lg border p-3 text-xs" placeholder="Motivo de transferencia"></textarea>
                         <button class="btn-soft w-full">Transferir cartera</button>
                     </form>

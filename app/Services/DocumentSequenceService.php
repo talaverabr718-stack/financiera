@@ -24,6 +24,7 @@ class DocumentSequenceService
                 'delinquency_case' => ['delinquency_cases', 'code'],
                 'collection_route' => ['collection_routes', 'code'],
                 'credit_product' => ['credit_products', 'code'],
+                'collaborator' => ['seller_profiles', 'code'],
             ];
 
             if (isset($targets[$key])) {

@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Http\Requests\CollaboratorRequest;
 use App\Models\Branch;
 use App\Models\SellerProfile;
-use App\Models\Zone;
 use App\Services\CollaboratorService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -16,17 +15,22 @@ class CollaboratorController extends Controller
 
     public function index(Request $request)
     {
-        $collaborators = SellerProfile::with(['user', 'branch', 'zone'])
+        $collaborators = SellerProfile::with(['user', 'branch'])
             ->withCount(['portfolioAssignments as active_clients_count' => fn ($q) => $q->whereNull('ended_at'), 'collectionRoutes'])
             ->when($request->filled('search'), fn ($q) => $q->where(fn ($q) => $q
                 ->where('code', 'like', '%'.$request->search.'%')
+                ->orWhere('full_name', 'like', '%'.$request->search.'%')
+                ->orWhere('email', 'like', '%'.$request->search.'%')
                 ->orWhere('identity_number', 'like', '%'.$request->search.'%')
                 ->orWhereHas('user', fn ($q) => $q->where('name', 'like', '%'.$request->search.'%')->orWhere('email', 'like', '%'.$request->search.'%'))))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
-            ->when($request->filled('capability'), fn ($q) => $q->whereJsonContains('capabilities', $request->capability))
             ->orderByDesc('status')->latest()->paginate(15)->withQueryString();
 
-        return Inertia::render('Collaborators/Index', ['collaborators' => $collaborators, 'filters' => $request->only('search','status','capability'), 'capabilities' => SellerProfile::CAPABILITIES, 'endpoints' => ['index' => route('collaborators.index'), 'create' => route('collaborators.create')]]);
+        return Inertia::render('Collaborators/Index', [
+            'collaborators' => $collaborators,
+            'filters' => $request->only('search', 'status'),
+            'endpoints' => ['index' => route('collaborators.index'), 'create' => route('collaborators.create')],
+        ]);
     }
 
     public function create()
@@ -43,9 +47,9 @@ class CollaboratorController extends Controller
 
     public function show(SellerProfile $collaborator)
     {
-        $collaborator->load(['user', 'branch', 'zone', 'portfolioAssignments.client', 'collectionRoutes' => fn ($q) => $q->latest('scheduled_date')->limit(10)]);
+        $collaborator->load(['user', 'branch', 'portfolioAssignments.client', 'collectionRoutes' => fn ($q) => $q->latest('scheduled_date')->limit(10)]);
 
-        return Inertia::render('Collaborators/Show', ['collaborator' => $collaborator, 'endpoints' => ['edit' => route('collaborators.edit',$collaborator), 'destroy' => route('collaborators.destroy',$collaborator), 'index' => route('collaborators.index')]]);
+        return Inertia::render('Collaborators/Show', ['collaborator' => $collaborator, 'endpoints' => ['edit' => route('collaborators.edit', $collaborator), 'destroy' => route('collaborators.destroy', $collaborator), 'index' => route('collaborators.index')]]);
     }
 
     public function edit(SellerProfile $collaborator)
@@ -72,10 +76,8 @@ class CollaboratorController extends Controller
         return Inertia::render('Collaborators/Form', [
             'collaborator' => $collaborator,
             'branches' => Branch::where('is_active', true)->orderBy('name')->get(),
-            'zones' => Zone::where('is_active', true)->orderBy('name')->get(),
-            'capabilities' => SellerProfile::CAPABILITIES,
             'editing' => $collaborator->exists,
-            'endpoints' => ['index' => route('collaborators.index'), 'save' => $collaborator->exists ? route('collaborators.update',$collaborator) : route('collaborators.store')],
+            'endpoints' => ['index' => route('collaborators.index'), 'save' => $collaborator->exists ? route('collaborators.update', $collaborator) : route('collaborators.store')],
         ]);
     }
 }

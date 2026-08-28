@@ -57,7 +57,7 @@ class ClientController extends Controller
             ->orderBy('code')->limit(15)->get()
             ->unique('id')->values()->map(fn (SellerProfile $seller) => [
                 'id' => $seller->id,
-                'label' => $seller->user->name,
+                'label' => $seller->display_name,
                 'description' => $seller->code,
             ]);
 
@@ -76,7 +76,7 @@ class ClientController extends Controller
         $client->load(['activeAssignment.seller.user', 'portfolioAssignments.seller.user', 'portfolioAssignments.previousSeller.user', 'portfolioAssignments.assignedBy', 'assets', 'creditApplications.product', 'creditApplications.disbursement.disbursedBy', 'loans.installments.paymentAllocations.payment.reversal', 'loans.activeDelinquencyCase', 'loans.collectionRecords.recordedBy', 'usedGuarantees.guarantor', 'usedGuarantees.loan', 'collectionRecords.collector.user', 'collectionRecords.recordedBy']);
 
         $timeline = collect([['type' => 'client', 'date' => $client->created_at, 'title' => 'Cliente registrado', 'description' => 'Se creó el expediente '.$client->code, 'url' => null]])
-            ->concat($client->portfolioAssignments->map(fn ($item) => ['type' => 'activity', 'date' => $item->assigned_at, 'title' => $item->previousSeller ? 'Transferencia de gestor' : 'Asignación de cartera', 'description' => ($item->previousSeller ? $item->previousSeller->user->name.' → ' : '').$item->seller->user->name.' · '.$item->reason, 'url' => null]))
+            ->concat($client->portfolioAssignments->map(fn ($item) => ['type' => 'activity', 'date' => $item->assigned_at, 'title' => $item->previousSeller ? 'Transferencia de gestor' : 'Asignación de cartera', 'description' => ($item->previousSeller ? $item->previousSeller->display_name.' → ' : '').$item->seller->display_name.' · '.$item->reason, 'url' => null]))
             ->concat($client->creditApplications->map(fn ($item) => ['type' => 'application', 'date' => $item->created_at, 'title' => 'Solicitud '.$item->number, 'description' => 'Estado: '.$item->status.' · '.$item->currency.' '.number_format((float) $item->requested_amount, 2), 'url' => route('applications.show', $item)]))
             ->concat($client->creditApplications->filter->disbursement->map(fn ($item) => ['type' => 'credit', 'date' => $item->disbursement->created_at, 'title' => 'Desembolso '.$item->disbursement->number, 'description' => $item->currency.' '.number_format((float) $item->disbursement->amount, 2), 'url' => route('loans.show', $item->loan)]))
             ->concat($client->collectionRecords->map(fn ($item) => ['type' => 'collection', 'date' => $item->recorded_at, 'title' => 'Gestión de cobranza', 'description' => ($item->amount ? 'C$ '.number_format((float) $item->amount, 2).' · ' : '').($item->notes ?: $item->outcome), 'url' => $item->loan_id ? route('loans.show', $item->loan_id) : null]))
@@ -90,7 +90,7 @@ class ClientController extends Controller
             'available' => max(0, (float) $client->estimated_income + (float) $client->other_income - (float) $client->estimated_expenses),
             'portfolio_assignments' => $client->portfolioAssignments->sortByDesc('assigned_at')->values()->map(fn ($assignment) => [
                 'id' => $assignment->id,
-                'seller_name' => $assignment->seller->user->name,
+                'seller_name' => $assignment->seller->display_name,
                 'reason' => $assignment->reason,
                 'assigned_at' => $assignment->assigned_at,
                 'ended_at' => $assignment->ended_at,

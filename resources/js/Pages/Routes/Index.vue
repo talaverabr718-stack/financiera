@@ -43,7 +43,7 @@ const shortDate = value => {
                 <div class="divide-y">
                     <a v-for="route in routes" :key="route.id" :href="`${endpoints.index}?date=${String(date).slice(0, 10)}&route=${route.id}`" class="block p-4" :class="selectedRoute?.id === route.id ? 'bg-blue-50' : 'hover:bg-slate-50'">
                         <div class="flex justify-between"><p class="font-semibold">{{ route.name }}</p><span class="badge bg-slate-100 text-slate-600">{{ route.status }}</span></div>
-                        <p class="mt-1 text-[10px] text-slate-400">{{ route.collector.user.name }} · {{ done(route) }}/{{ route.stops.length }}</p>
+                        <p class="mt-1 text-[10px] text-slate-400">{{ route.collector.display_name }} · {{ done(route) }}/{{ route.stops.length }}</p>
                     </a>
                 </div>
             </aside>
@@ -53,7 +53,7 @@ const shortDate = value => {
                         <div>
                             <p class="dark-kicker">Ruta seleccionada</p>
                             <h2 class="mt-2 text-lg font-semibold">{{ selectedRoute.name }}</h2>
-                            <p class="text-xs text-slate-300">{{ selectedRoute.code }} · {{ selectedRoute.collector.user.name }}</p>
+                            <p class="text-xs text-slate-300">{{ selectedRoute.code }} · {{ selectedRoute.collector.display_name }}</p>
                         </div>
                         <form class="flex gap-2" @submit.prevent="saveStatus">
                             <select v-model="status.status" class="rounded-lg bg-white px-3 text-xs text-slate-800">

@@ -3,8 +3,9 @@ import { Head, useForm, usePage } from '@inertiajs/vue3';
 
 const props = defineProps({ loginUrl: String });
 const page = usePage();
-const form = useForm({ email: '', password: '', remember: false });
-const submit = () => form.post(props.loginUrl, { preserveScroll: true, onFinish: () => form.reset('password') });
+const form = useForm({ method: 'password', email: '', password: '', pin: '', remember: false });
+const setMethod = method => { form.method = method; form.password = ''; form.pin = ''; form.clearErrors(); };
+const submit = () => form.post(props.loginUrl, { preserveScroll: true, onFinish: () => form.reset('password', 'pin') });
 </script>
 
 <template>
@@ -31,8 +32,10 @@ const submit = () => form.post(props.loginUrl, { preserveScroll: true, onFinish:
             <div class="w-full max-w-md">
                 <div class="mb-9"><p class="eyebrow">Acceso seguro</p><h2 class="mt-2 text-3xl font-semibold tracking-[-.035em] text-slate-950">Bienvenido de vuelta</h2><p class="mt-2 text-sm leading-6 text-slate-500">Ingresa tus credenciales para continuar con la operación.</p></div>
                 <form class="space-y-5" @submit.prevent="submit">
+                    <div class="grid grid-cols-2 rounded-xl bg-slate-100 p-1 text-xs font-semibold"><button type="button" class="rounded-lg px-3 py-2 transition" :class="form.method === 'password' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'" @click="setMethod('password')">Contraseña</button><button type="button" class="rounded-lg px-3 py-2 transition" :class="form.method === 'pin' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'" @click="setMethod('pin')">PIN</button></div>
                     <label class="field-label">Correo electrónico<input v-model="form.email" type="email" autocomplete="username" autofocus class="control login-control" placeholder="nombre@financiera.com" required></label>
-                    <label class="field-label">Contraseña<input v-model="form.password" type="password" autocomplete="current-password" class="control login-control" placeholder="••••••••" required></label>
+                    <label v-if="form.method === 'password'" class="field-label">Contraseña<input v-model="form.password" type="password" autocomplete="current-password" class="control login-control" placeholder="••••••••" required></label>
+                    <label v-else class="field-label">PIN de 4 dígitos<input v-model="form.pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="one-time-code" class="control login-control text-center tracking-[.45em]" placeholder="••••" required></label>
                     <div class="flex items-center justify-between gap-4"><label class="flex items-center gap-2 text-xs font-medium text-slate-600"><input v-model="form.remember" type="checkbox" class="accent-blue-600"> Mantener sesión</label><span class="text-xs font-semibold text-blue-700">Acceso institucional</span></div>
                     <p v-if="form.errors.email" class="rounded-xl border border-rose-400/20 bg-rose-500/10 p-3 text-xs font-medium text-rose-300">{{ form.errors.email }}</p>
                     <button class="btn-primary h-12 w-full rounded-xl text-sm" :disabled="form.processing"><span v-if="form.processing" class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>{{ form.processing ? 'Verificando…' : 'Ingresar al sistema' }}<span v-if="!form.processing">→</span></button>
