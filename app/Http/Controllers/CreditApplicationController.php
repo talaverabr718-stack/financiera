@@ -125,11 +125,11 @@ class CreditApplicationController extends Controller
             $locked = CreditApplication::lockForUpdate()->findOrFail($application->id);
             $approval = $data['status'] === 'approved';
             $approvedAt = $approval ? ($locked->approved_at ?? now()) : $locked->approved_at;
-            $firstPaymentDate = $approval ? ($locked->proposed_first_payment_date ?? today()) : $locked->proposed_first_payment_date;
+            $firstPaymentDate = $approval ? $this->firstInstallmentAfter($locked, $approvedAt) : $locked->proposed_first_payment_date;
             if ($approval) {
                 $locked->proposed_first_payment_date = $firstPaymentDate;
             }
-            $lastPayment = $approval ? ($locked->estimated_last_payment_date ?? $this->estimateLastPaymentDate($locked, $approvedAt)) : $locked->estimated_last_payment_date;
+            $lastPayment = $approval ? $this->estimateLastPaymentDate($locked, $approvedAt) : $locked->estimated_last_payment_date;
 
             $locked->update($data + [
                 'decided_by' => $decision ? auth()->id() : $locked->decided_by,
@@ -148,6 +148,7 @@ class CreditApplicationController extends Controller
                 'application' => [
                     ...$fresh->only(['status', 'approved_amount', 'decision_reason']),
                     'approved_at' => $fresh->approved_at?->toISOString(),
+                    'proposed_first_payment_date' => $fresh->proposed_first_payment_date?->toDateString(),
                     'estimated_last_payment_date' => $fresh->estimated_last_payment_date?->toDateString(),
                 ],
             ]);
@@ -156,10 +157,26 @@ class CreditApplicationController extends Controller
         return back()->with('success', 'Estado de la solicitud actualizado.');
     }
 
+    private function firstInstallmentAfter(CreditApplication $application, Carbon $approvedAt): Carbon
+    {
+        $existing = $application->proposed_first_payment_date?->copy()->startOfDay();
+        $approvalDay = $approvedAt->copy()->startOfDay();
+        if ($existing && $existing->gt($approvalDay)) {
+            return $existing;
+        }
+
+        return match ($application->payment_frequency) {
+            'daily' => $approvalDay->addDay(),
+            'weekly' => $approvalDay->addWeek(),
+            'biweekly' => $approvalDay->addDays(14),
+            'monthly' => $approvalDay->addMonthNoOverflow(),
+        };
+    }
+
     private function estimateLastPaymentDate(CreditApplication $application, Carbon $approvedAt): Carbon
     {
-        $date = ($application->proposed_first_payment_date ?? $approvedAt)->copy()->startOfDay();
-        $remainingPayments = max(0, $application->term - ($application->proposed_first_payment_date ? 1 : 0));
+        $date = ($application->proposed_first_payment_date ?? $this->firstInstallmentAfter($application, $approvedAt))->copy()->startOfDay();
+        $remainingPayments = max(0, $application->term - 1);
 
         return match ($application->payment_frequency) {
             'daily' => $date->addDays($remainingPayments),
@@ -174,6 +191,17 @@ class CreditApplicationController extends Controller
         $application->load('guarantees.latestEvaluation');
         $guarantors = Guarantor::with(['guarantees.application.client', 'guarantees.loan', 'guarantees.latestEvaluation'])->orderBy('full_name')->get();
 
-        return view('applications.form', ['application' => $application, 'clients' => Client::where('status', 'active')->withCount(['loans as open_loans_count' => fn ($query) => $query->whereIn('status', Loan::COLLECTIBLE_STATUSES)])->orderBy('full_name')->get(), 'sellers' => SellerProfile::with('user')->where('status', 'active')->whereJsonContains('capabilities', 'credit_origination')->get(), 'products' => CreditProduct::where('is_active', true)->orderBy('name')->get(), 'guarantors' => $guarantors]);
+        return Inertia::render('Applications/Form', [
+            'application' => $application,
+            'clients' => Client::where('status', 'active')->withCount(['loans as open_loans_count' => fn ($query) => $query->whereIn('status', Loan::COLLECTIBLE_STATUSES)])->orderBy('full_name')->get(),
+            'sellers' => SellerProfile::with('user')->where('status', 'active')->whereJsonContains('capabilities', 'credit_origination')->get(),
+            'products' => CreditProduct::where('is_active', true)->orderBy('name')->get(),
+            'guarantors' => $guarantors,
+            'editing' => $application->exists,
+            'endpoints' => [
+                'index' => route('applications.index'),
+                'save' => $application->exists ? route('applications.update', $application) : route('applications.store'),
+            ],
+        ]);
     }
 }

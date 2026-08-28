@@ -51,7 +51,18 @@ class LoanPortfolioController extends Controller
             ->filter(fn ($item) => $item['date'])->sortByDesc('date')->values();
         $delinquency = app(DelinquencyTrackingService::class)->summarizeLoan($loan);
 
-        return view('loans.show', compact('loan', 'timeline', 'delinquency'));
+        return Inertia::render('Loans/Show', [
+            'loan' => $loan,
+            'timeline' => $timeline,
+            'delinquency' => $delinquency,
+            'endpoints' => [
+                'index' => route('loans.index'),
+                'status' => route('loans.status', $loan),
+                'recalculate' => route('loans.delinquency.recalculate', $loan),
+                'client' => route('clients.show', $loan->client),
+                'application' => route('applications.show', $loan->application),
+            ],
+        ]);
     }
 
     public function updateStatus(Request $request, Loan $loan)

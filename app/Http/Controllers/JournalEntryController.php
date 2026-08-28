@@ -7,6 +7,7 @@ use App\Models\Account;
 use App\Models\JournalEntry;
 use App\Services\AccountingService;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class JournalEntryController extends Controller
 {
@@ -16,12 +17,12 @@ class JournalEntryController extends Controller
     {
         $entries = JournalEntry::with('user')->when($request->status, fn ($q, $v) => $q->where('status', $v))->when($request->search, fn ($q, $v) => $q->where(fn ($q) => $q->where('number', 'like', "%$v%")->orWhere('concept', 'like', "%$v%")))->latest('date')->latest('id')->paginate(20)->withQueryString();
 
-        return view('accounting.entries.index', compact('entries'));
+        return Inertia::render('Accounting/Entries/Index', ['entries'=>$entries,'filters'=>$request->only('search','status'),'endpoints'=>['index'=>route('accounting.entries.index'),'create'=>route('accounting.entries.create')]]);
     }
 
     public function create()
     {
-        return view('accounting.entries.create', ['accounts' => Account::active()->postable()->orderBy('code')->get()]);
+        return Inertia::render('Accounting/Entries/Create', ['accounts' => Account::active()->postable()->orderBy('code')->get(), 'endpoints'=>['index'=>route('accounting.entries.index'),'store'=>route('accounting.entries.store')]]);
     }
 
     public function store(JournalEntryRequest $request)
@@ -35,7 +36,7 @@ class JournalEntryController extends Controller
     {
         $entry->load(['lines.account', 'user', 'reversal', 'reversalOf']);
 
-        return view('accounting.entries.show', compact('entry'));
+        return Inertia::render('Accounting/Entries/Show', ['entry'=>$entry,'endpoints'=>['index'=>route('accounting.entries.index'),'post'=>route('accounting.entries.post',$entry),'reverse'=>route('accounting.entries.reverse',$entry)]]);
     }
 
     public function post(JournalEntry $entry)

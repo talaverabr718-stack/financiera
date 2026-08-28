@@ -8,6 +8,7 @@ use App\Models\SellerProfile;
 use App\Models\Zone;
 use App\Services\CollaboratorService;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class CollaboratorController extends Controller
 {
@@ -25,7 +26,7 @@ class CollaboratorController extends Controller
             ->when($request->filled('capability'), fn ($q) => $q->whereJsonContains('capabilities', $request->capability))
             ->orderByDesc('status')->latest()->paginate(15)->withQueryString();
 
-        return view('collaborators.index', compact('collaborators'));
+        return Inertia::render('Collaborators/Index', ['collaborators' => $collaborators, 'filters' => $request->only('search','status','capability'), 'capabilities' => SellerProfile::CAPABILITIES, 'endpoints' => ['index' => route('collaborators.index'), 'create' => route('collaborators.create')]]);
     }
 
     public function create()
@@ -44,7 +45,7 @@ class CollaboratorController extends Controller
     {
         $collaborator->load(['user', 'branch', 'zone', 'portfolioAssignments.client', 'collectionRoutes' => fn ($q) => $q->latest('scheduled_date')->limit(10)]);
 
-        return view('collaborators.show', compact('collaborator'));
+        return Inertia::render('Collaborators/Show', ['collaborator' => $collaborator, 'endpoints' => ['edit' => route('collaborators.edit',$collaborator), 'destroy' => route('collaborators.destroy',$collaborator), 'index' => route('collaborators.index')]]);
     }
 
     public function edit(SellerProfile $collaborator)
@@ -68,10 +69,13 @@ class CollaboratorController extends Controller
 
     private function form(SellerProfile $collaborator)
     {
-        return view('collaborators.form', [
+        return Inertia::render('Collaborators/Form', [
             'collaborator' => $collaborator,
             'branches' => Branch::where('is_active', true)->orderBy('name')->get(),
             'zones' => Zone::where('is_active', true)->orderBy('name')->get(),
+            'capabilities' => SellerProfile::CAPABILITIES,
+            'editing' => $collaborator->exists,
+            'endpoints' => ['index' => route('collaborators.index'), 'save' => $collaborator->exists ? route('collaborators.update',$collaborator) : route('collaborators.store')],
         ]);
     }
 }

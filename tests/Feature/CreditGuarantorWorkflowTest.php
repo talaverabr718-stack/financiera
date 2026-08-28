@@ -13,6 +13,7 @@ use Database\Seeders\ClientModuleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class CreditGuarantorWorkflowTest extends TestCase
@@ -78,7 +79,8 @@ class CreditGuarantorWorkflowTest extends TestCase
         $this->assertCount(2, $guarantor->fresh()->guarantees);
         $this->assertDatabaseCount('guarantor_evaluations', 2);
         $this->actingAs($user)->get(route('applications.create'))
-            ->assertOk()->assertSee('Fiador Independiente')->assertSee('Saldo garantizado');
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+                ->component('Applications/Form')->where('guarantors.0.full_name', 'Fiador Independiente'));
     }
 
     public function test_guarantor_and_application_approval_are_authorized_and_ordered(): void

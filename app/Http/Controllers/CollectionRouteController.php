@@ -16,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
 
 class CollectionRouteController extends Controller
 {
@@ -29,13 +30,14 @@ class CollectionRouteController extends Controller
         $requested = $routes->firstWhere('id', $request->integer('route'));
         $selectedRoute = $requested ?? $openRoutes->first();
 
-        return view('routes.index', [
+        return Inertia::render('Routes/Index', [
             'routes' => $routes,
             'openRoutes' => $openRoutes,
             'completedRoutes' => $completedRoutes,
             'selectedRoute' => $selectedRoute,
             'date' => $date,
             'googleMapsKey' => config('services.google_maps.key'),
+            'endpoints' => ['index' => route('routes.index'), 'create' => route('routes.create'), 'visitTemplate' => route('routes.stops.visit',['stop'=>'__STOP__'])],
         ]);
     }
 
@@ -173,10 +175,14 @@ class CollectionRouteController extends Controller
 
     private function form(CollectionRoute $route)
     {
-        return view('routes.form', [
+        $selectedIds = $route->exists ? $route->stops->pluck('client_id')->all() : [];
+        $lockedIds = $route->exists ? $route->stops->filter(fn ($stop) => $stop->records->isNotEmpty())->pluck('client_id')->all() : [];
+        return Inertia::render('Routes/Form', [
             'route' => $route,
             'sellers' => SellerProfile::with('user')->where('status', 'active')->whereJsonContains('capabilities', 'collections')->get(),
             'clients' => Client::with('activeAssignment')->where('status', 'active')->orderBy('full_name')->get(),
+            'selectedIds' => $selectedIds, 'lockedIds' => $lockedIds, 'editing' => $route->exists,
+            'endpoints' => ['index' => route('routes.index'), 'save' => $route->exists ? route('routes.update',$route) : route('routes.store')],
         ]);
     }
 }

@@ -1,0 +1,1 @@
+<script setup>import AppLayout from '../../Layouts/AppLayout.vue'; defineProps({section:String});</script><template><AppLayout :title="section" eyebrow="Módulo" description="Este módulo aún no tiene operaciones configuradas."><section class="card p-10 text-center text-slate-500">No hay funciones disponibles en esta sección.</section></AppLayout></template>

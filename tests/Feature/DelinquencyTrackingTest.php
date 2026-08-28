@@ -279,20 +279,18 @@ class DelinquencyTrackingTest extends TestCase
             ->where('cases.data.0.current_days', 6)
             ->where('endpoints.recalculate', route('delinquency.recalculate')));
 
-        $this->get(route('loans.show', $loan))->assertOk()
-            ->assertSee('MORA-001')
-            ->assertSee('En mora')
-            ->assertSee('Cuotas')
-            ->assertSee('6 días')
-            ->assertSee('Sin pagos')
-            ->assertSee('% mora por día')
-            ->assertSee('Recalcular mora');
+        $this->get(route('loans.show', $loan))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Loans/Show')->where('delinquency.in_arrears', true)
+            ->where('delinquency.code', 'MORA-001')
+            ->where('delinquency.ledger.0.days_overdue', 6));
 
         $this->get(route('clients.show', $loan->client))->assertOk()
-            ->assertSee('MORA-001')
-            ->assertSee('Situación de mora')
-            ->assertSee('Cuotas')
-            ->assertSee('6 días');
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Clients/Show')
+                ->where('delinquency.in_arrears', true)
+                ->has('delinquency.ledger', 1)
+                ->where('delinquency.active_cases.0.code', 'MORA-001')
+                ->where('delinquency.ledger.0.days_overdue', 6));
     }
 
     public function test_ledger_keeps_zero_interest_and_zero_monetary_delinquency_while_counting_days(): void

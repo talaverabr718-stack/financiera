@@ -11,6 +11,7 @@ use App\Models\SellerProfile;
 use App\Models\User;
 use Database\Seeders\ClientModuleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class CollectionModuleTest extends TestCase
@@ -23,27 +24,12 @@ class CollectionModuleTest extends TestCase
 
         $response = $this->get(route('collections.index', ['date' => today()->format('Y-m-d')]));
 
-        $response->assertOk()
-            ->assertSee('name="amount"', false)
-            ->assertSee('inputmode="decimal"', false)
-            ->assertSee('aria-label="Cantidad cobrada"', false)
-            ->assertSee('Pagar')
-            ->assertSee('Cuotas pendientes')
-            ->assertSee('Registrar cobro')
-            ->assertSee('Cobrado hoy')
-            ->assertSee('Próximas visitas')
-            ->assertSee('Visitas pendientes')
-            ->assertSee('Cobros retrasados')
-            ->assertSee('Ver próximas visitas')
-            ->assertSee('Ver visitas pendientes')
-            ->assertSee('Ver pagos atrasados')
-            ->assertSee('data-open-modal="late-collections"', false)
-            ->assertSee('data-open-modal="pending-visits"', false)
-            ->assertSee('data-open-modal="upcoming-visits"', false)
-            ->assertSee('name="agenda_route"', false)
-            ->assertSee('Estelí Centro')
-            ->assertSee('visitas del día')
-            ->assertViewHas('selectedRoute');
+        $response->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Collections/Index')
+            ->has('pendingStops')
+            ->has('paymentHistory.data')
+            ->has('selectedRoute')
+            ->where('storeTemplate', route('collections.store', ['stop' => '__STOP__'])));
     }
 
     public function test_dashboard_counts_upcoming_visits_and_late_collections(): void
@@ -80,15 +66,10 @@ class CollectionModuleTest extends TestCase
         ]);
 
         $this->get(route('collections.index', ['date' => today()->format('Y-m-d')]))
-            ->assertOk()
-            ->assertViewHas('upcomingVisits', 1)
-            ->assertViewHas('upcomingStops', fn ($items) => $items->count() === 1 && $items->first()->route->name === 'Ruta de mañana')
-            ->assertViewHas('lateCollections', 1)
-            ->assertViewHas('lateInstallments', fn ($items) => $items->count() === 1)
-            ->assertSee('Cuota 1')
-            ->assertSee('Días de atraso')
-            ->assertSee('Saldo de la cuota')
-            ->assertSee('Ruta de mañana');
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+                ->component('Collections/Index')->where('upcomingVisits', 1)
+                ->where('upcomingStops.0.route.name', 'Ruta de mañana')
+                ->where('lateCollections', 1)->has('lateInstallments', 1));
     }
 
     public function test_agenda_route_selector_shows_the_selected_days_visits(): void
@@ -115,10 +96,9 @@ class CollectionModuleTest extends TestCase
         ]);
 
         $this->get(route('collections.index', ['date' => today()->format('Y-m-d'), 'agenda_route' => $second->id]))
-            ->assertOk()
-            ->assertSee('Estelí Norte')
-            ->assertSee($otherClient->full_name)
-            ->assertViewHas('selectedRoute', fn ($route) => $route->id === $second->id && $route->stops->pluck('client_id')->all() === [$otherClient->id]);
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+                ->where('selectedRoute.id', $second->id)
+                ->where('selectedRoute.stops.0.client_id', $otherClient->id));
     }
 
     public function test_collection_result_updates_the_linked_route_stop(): void
@@ -144,17 +124,12 @@ class CollectionModuleTest extends TestCase
         $this->actingAs($user)->get(route('routes.index', [
             'date' => $route->scheduled_date->format('Y-m-d'),
             'route' => $route->id,
-        ]))->assertOk()
-            ->assertSee('visited_at_label', false)
-            ->assertSee($visitLabel)
-            ->assertSee('Visitado el '.$visitLabel);
+        ]))->assertOk()->assertInertia(fn (Assert $page) => $page->where('selectedRoute.stops.0.status', 'visited'));
 
         $this->actingAs($user)->get(route('collections.index', [
             'date' => $route->scheduled_date->format('Y-m-d'),
             'agenda_route' => $route->id,
-        ]))->assertOk()
-            ->assertSee('Visitado')
-            ->assertSee($visitLabel);
+        ]))->assertOk()->assertInertia(fn (Assert $page) => $page->has('paymentHistory.data'));
         $record = CollectionRecord::firstOrFail();
         $this->assertSame('applied', $record->application_status);
         $this->assertSame('750.00', $record->amount);
@@ -180,9 +155,8 @@ class CollectionModuleTest extends TestCase
         $this->assertSame('rescheduled', $stop->fresh()->status);
 
         $this->actingAs($user)->get(route('collections.index', ['date' => today()->format('Y-m-d')]))
-            ->assertOk()
-            ->assertSee('Promesa de pago')
-            ->assertSee('Todas las actividades');
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+                ->where('paymentHistory.data.0.outcome', 'promise'));
     }
 
     public function test_payment_cannot_be_linked_to_another_clients_loan(): void

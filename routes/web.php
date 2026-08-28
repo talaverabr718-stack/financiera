@@ -22,6 +22,7 @@ use App\Http\Controllers\LoanPortfolioController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
 Route::middleware('guest')->group(function () {
     Route::get('/ingresar', [AuthenticatedSessionController::class, 'create'])->name('login');
@@ -104,6 +105,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/{section}', function (string $section) {
         abort_unless(in_array($section, ['clientes', 'caja', 'contabilidad', 'reportes'], true), 404);
 
-        return view('sections.placeholder', compact('section'));
+        return Inertia::render('Sections/Placeholder', ['section' => $section]);
     })->name('section');
 });

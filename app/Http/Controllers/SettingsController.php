@@ -38,12 +38,12 @@ class SettingsController extends Controller
             'sequences' => DB::table('document_sequences')->exists(),
         ];
 
-        return view('settings.index', compact('checks'));
+        return $this->page('index', ['checks' => $checks]);
     }
 
     public function modules()
     {
-        return view('settings.modules', ['modules' => SystemModule::orderBy('sort_order')->get()]);
+        return $this->page('modules', ['modules' => SystemModule::orderBy('sort_order')->get(), 'update' => route('settings.modules.update')]);
     }
 
     public function updateModules(UpdateModuleSettingsRequest $request)
@@ -96,7 +96,7 @@ class SettingsController extends Controller
 
     public function appearance()
     {
-        return view('settings.appearance', ['settings' => $this->settings->group('appearance')]);
+        return $this->page('appearance', ['settings' => $this->settings->group('appearance'), 'update' => route('settings.appearance.update')]);
     }
 
     public function updateAppearance(UpdateAppearanceSettingsRequest $request)
@@ -108,7 +108,7 @@ class SettingsController extends Controller
 
     public function brand()
     {
-        return view('settings.brand', ['settings' => $this->settings->group('brand')]);
+        return $this->page('brand', ['settings' => $this->settings->group('brand'), 'update' => route('settings.brand.update')]);
     }
 
     public function updateBrand(UpdateBrandSettingsRequest $request)
@@ -140,7 +140,7 @@ class SettingsController extends Controller
 
     public function general()
     {
-        return view('settings.general', ['settings' => $this->settings->group('general')]);
+        return $this->page('general', ['settings' => $this->settings->group('general'), 'update' => route('settings.general.update')]);
     }
 
     public function updateGeneral(UpdateGeneralSettingsRequest $request)
@@ -152,12 +152,12 @@ class SettingsController extends Controller
 
     public function financial()
     {
-        return view('settings.financial', ['products' => CreditProduct::orderBy('name')->get(), 'criticalSettings' => DB::table('financial_settings')->orderBy('group')->orderBy('label')->get()]);
+        return $this->page('financial', ['products' => CreditProduct::orderBy('name')->get(), 'criticalSettings' => DB::table('financial_settings')->orderBy('group')->orderBy('label')->get(), 'productsUrl' => route('products.index')]);
     }
 
     public function accounting()
     {
-        return view('settings.accounting', ['settings' => $this->settings->group('accounting'), 'accounts' => Account::active()->postable()->orderBy('code')->get()]);
+        return $this->page('accounting', ['settings' => $this->settings->group('accounting'), 'accounts' => Account::active()->postable()->orderBy('code')->get(), 'update' => route('settings.accounting.update')]);
     }
 
     public function updateAccounting(UpdateAccountingSettingsRequest $request)
@@ -169,7 +169,7 @@ class SettingsController extends Controller
 
     public function sequences()
     {
-        return view('settings.sequences', ['sequences' => DB::table('document_sequences')->orderBy('key')->get()]);
+        return $this->page('sequences', ['sequences' => DB::table('document_sequences')->orderBy('key')->get(), 'update' => route('settings.sequences.update')]);
     }
 
     public function updateSequences(UpdateSequenceSettingsRequest $request)
@@ -181,5 +181,15 @@ class SettingsController extends Controller
         });
 
         return back()->with('success', 'Formatos de consecutivos actualizados sin alterar el siguiente número.');
+    }
+
+    private function page(string $section, array $props = [])
+    {
+        $labels = ['index' => 'Resumen', 'brand' => 'Marca', 'modules' => 'Módulos', 'permissions' => 'Permisos', 'appearance' => 'Apariencia', 'general' => 'Institución', 'financial' => 'Financiera', 'accounting' => 'Contabilidad', 'sequences' => 'Consecutivos'];
+
+        return Inertia::render('Settings/Index', $props + [
+            'section' => $section,
+            'tabs' => collect($labels)->map(fn ($label, $name) => ['label' => $label, 'url' => route('settings.'.$name), 'active' => $name === $section])->values(),
+        ]);
     }
 }
