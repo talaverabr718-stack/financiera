@@ -2,6 +2,7 @@
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import AppSidebar from '../components/navigation/AppSidebar.vue';
+import AccountingNav from '../components/accounting/AccountingNav.vue';
 
 defineProps({
     title: String,
@@ -14,6 +15,7 @@ const sidebarCollapsed = ref(false);
 const searchTerm = ref('');
 const clock = ref('');
 const page = usePage();
+const isAccounting = computed(() => page.url.split('?')[0].startsWith('/contabilidad'));
 let clockTimer;
 
 const initials = computed(() => (page.props.auth.user?.name ?? 'A').split(/\s+/).slice(0, 2).map(value => value.charAt(0)).join('').toUpperCase());
@@ -95,6 +97,7 @@ watch(() => page.url, syncSearch);
                     <div><p class="eyebrow">{{ eyebrow }}</p><h1 class="page-title mt-1">{{ title }}</h1><p v-if="description" class="page-description">{{ description }}</p></div>
                     <div class="shrink-0"><slot name="header-actions" /></div>
                 </div>
+                <AccountingNav v-if="isAccounting" />
                 <slot />
             </div>
         </main>

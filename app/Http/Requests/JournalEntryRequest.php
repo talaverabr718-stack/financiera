@@ -14,7 +14,7 @@ class JournalEntryRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['date' => ['required', 'date', 'before_or_equal:today'], 'concept' => ['required', 'string', 'max:255'], 'reference' => ['nullable', 'string', 'max:100'], 'notes' => ['nullable', 'string', 'max:1000'], 'lines' => ['required', 'array', 'min:2'], 'lines.*.account_id' => ['required', Rule::exists('accounts', 'id')->where('is_active', true)->where('is_postable', true)], 'lines.*.detail' => ['nullable', 'string', 'max:255'], 'lines.*.debit' => ['nullable', 'decimal:0,2', 'gte:0'], 'lines.*.credit' => ['nullable', 'decimal:0,2', 'gte:0']];
+        return ['date' => ['required', 'date', 'before_or_equal:today'], 'concept' => ['required', 'string', 'max:255'], 'reference' => ['nullable', 'string', 'max:100'], 'document_type' => ['nullable', Rule::in(['invoice','receipt','credit_note','debit_note','withholding','bank_document','internal_support','other'])], 'document_number' => ['nullable', 'string', 'max:100', 'required_with:document_type'], 'counterparty_name' => ['nullable', 'string', 'max:180'], 'counterparty_ruc' => ['nullable', 'string', 'max:30'], 'notes' => ['nullable', 'string', 'max:1000'], 'lines' => ['required', 'array', 'min:2'], 'lines.*.account_id' => ['required', Rule::exists('accounts', 'id')->where('is_active', true)->where('is_postable', true)], 'lines.*.cost_center_id' => ['nullable', Rule::exists('cost_centers', 'id')->where('is_active', true)], 'lines.*.detail' => ['nullable', 'string', 'max:255'], 'lines.*.debit' => ['nullable', 'decimal:0,2', 'gte:0'], 'lines.*.credit' => ['nullable', 'decimal:0,2', 'gte:0']];
     }
 
     public function withValidator($validator): void

@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class JournalEntry extends Model
 {
-    protected $fillable = ['number', 'date', 'concept', 'reference', 'status', 'total_debit', 'total_credit', 'reversal_of_id', 'user_id', 'posted_at', 'reversed_at', 'notes'];
+    protected $fillable = ['number', 'date', 'accounting_period_id', 'concept', 'reference', 'document_type', 'document_number', 'counterparty_name', 'counterparty_ruc', 'status', 'total_debit', 'total_credit', 'reversal_of_id', 'user_id', 'posted_by_id', 'posted_at', 'reversed_at', 'notes'];
 
     protected function casts(): array
     {
@@ -23,6 +23,10 @@ class JournalEntry extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function postedBy() { return $this->belongsTo(User::class, 'posted_by_id'); }
+    public function accountingPeriod() { return $this->belongsTo(AccountingPeriod::class); }
+    public function auditEvents() { return $this->morphMany(AuditEvent::class, 'auditable'); }
+
     public function reversalOf()
     {
         return $this->belongsTo(self::class, 'reversal_of_id');
@@ -35,7 +39,8 @@ class JournalEntry extends Model
 
     public function scopePosted($query)
     {
-        return $query->where('status', 'posted');
+        // El asiento original reversado y su compensación forman parte del libro.
+        return $query->whereIn('status', ['posted', 'reversed']);
     }
 
     public function getStatusLabelAttribute(): string

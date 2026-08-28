@@ -8,7 +8,7 @@ class JournalEntryLine extends Model
 {
     public $timestamps = false;
 
-    protected $fillable = ['journal_entry_id', 'account_id', 'detail', 'debit', 'credit'];
+    protected $fillable = ['journal_entry_id', 'account_id', 'cost_center_id', 'detail', 'debit', 'credit'];
 
     protected function casts(): array
     {
@@ -24,4 +24,6 @@ class JournalEntryLine extends Model
     {
         return $this->belongsTo(Account::class);
     }
+
+    public function costCenter() { return $this->belongsTo(CostCenter::class); }
 }
