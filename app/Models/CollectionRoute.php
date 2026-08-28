@@ -23,6 +23,15 @@ class CollectionRoute extends Model
         return $this->hasMany(CollectionRouteStop::class)->orderBy('position');
     }
 
+    public function withCollectorDues(\Carbon\CarbonInterface $asOf): self
+    {
+        $this->stops->each(function (CollectionRouteStop $stop) use ($asOf) {
+            $stop->setAttribute('dues', $stop->collectorDuesOn($asOf));
+        });
+
+        return $this;
+    }
+
     public function isOpenForField(): bool
     {
         if ($this->relationLoaded('stops')) {

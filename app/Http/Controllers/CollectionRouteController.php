@@ -23,12 +23,13 @@ class CollectionRouteController extends Controller
     public function index(Request $request)
     {
         $date = $request->date('date') ?? today();
-        $routes = CollectionRoute::with(['collector.user', 'stops.client'])
+        $routes = CollectionRoute::with(['collector.user', 'stops.client.loans.installments'])
             ->whereDate('scheduled_date', $date)->orderBy('starts_at')->get();
         $openRoutes = $routes->filter->isOpenForField()->values();
         $completedRoutes = $routes->reject->isOpenForField()->values();
         $requested = $routes->firstWhere('id', $request->integer('route'));
         $selectedRoute = $requested ?? $openRoutes->first();
+        $routes->each(fn (CollectionRoute $route) => $route->withCollectorDues($date));
 
         return Inertia::render('Routes/Index', [
             'routes' => $routes,

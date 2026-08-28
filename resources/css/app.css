@@ -1385,6 +1385,48 @@ main form > div:last-child:has(> .btn-primary), main form > div:last-child:has(>
     .mesa-ticker { border-radius:1rem; grid-template-columns:1fr; }
 }
 
+.agenda-routes {
+    display: flex; flex-wrap: wrap; gap: .5rem;
+    padding: .85rem 1.05rem; border-bottom: 1px solid var(--sv-line, rgba(255,255,255,.08));
+}
+.agenda-route {
+    display: grid; gap: .15rem; min-width: 10.5rem; text-align: left;
+    border: 1px solid var(--sv-line, rgba(255,255,255,.08)); border-radius: .85rem;
+    background: rgba(255,255,255,.04); padding: .65rem .8rem; color: inherit; cursor: pointer;
+    transition: border-color .15s, background .15s, transform .15s;
+}
+.agenda-route:hover { transform: translateY(-1px); border-color: rgba(91,140,255,.45); }
+.agenda-route.is-active {
+    border-color: var(--sv-accent, #5b8cff);
+    background: rgba(91,140,255,.16);
+    box-shadow: 0 0 0 3px rgba(91,140,255,.14);
+}
+.agenda-route strong { font-size: .78rem; font-weight: 750; }
+.agenda-route small { color: var(--sv-muted, #8b93a7); font-size: .62rem; }
+html.theme-day .agenda-route { background: #fff; }
+html.theme-day .agenda-route.is-active { background: #eff6ff; border-color: #1d4ed8; }
+
+.agenda-dues { display: grid; gap: .45rem; margin-top: .85rem; }
+.agenda-dues-empty { color: var(--sv-muted, #8b93a7); font-size: .68rem; }
+.agenda-due {
+    border: 1px solid var(--sv-line, rgba(255,255,255,.08)); border-radius: .8rem; padding: .6rem .75rem;
+    background: rgba(255,255,255,.04);
+}
+.agenda-due header { display: flex; justify-content: space-between; gap: 1rem; font-size: .62rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.agenda-due p { margin-top: .35rem; font-size: .72rem; }
+.agenda-due.is-today { border-color: rgba(34,211,238,.28); }
+.agenda-due.is-overdue { border-color: rgba(251,113,133,.32); }
+.agenda-dues-total { font-size: .75rem; font-weight: 750; }
+.agenda-stop-actions { display: flex; justify-content: flex-end; margin-top: .85rem; }
+.modal-panel.collection-modal {
+    width: min(22.5rem, calc(100vw - 2rem));
+    max-width: min(22.5rem, calc(100vw - 2rem));
+    margin-inline: auto;
+}
+html.theme-day .agenda-due { background: #f8fafc; }
+html.theme-day .agenda-due.is-today { background: #ecfdf5; border-color: rgba(4,120,87,.2); }
+html.theme-day .agenda-due.is-overdue { background: #fff1f2; border-color: rgba(190,18,60,.2); }
+
 html.theme-day .mesa {
     --mesa-accent:#1d4ed8; --mesa-cyan:#0f766e; --mesa-ok:#047857; --mesa-warn:#b45309; --mesa-bad:#be123c;
     --mesa-text:#152033; --mesa-muted:#5c6b80; --mesa-line:rgba(15,32,58,.1); --mesa-glass:#fff;
