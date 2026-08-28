@@ -23,11 +23,22 @@ class ReportController extends Controller
         $to = $filters['end_date'] ?? today()->format('Y-m-d');
         $query = $this->reports->query($type, $from, $to, $request);
         $summary = $this->reports->summary($type, clone $query);
+        $analytics = $this->reports->analytics($type, clone $query);
+        $optionRequest = $request->duplicate();
+        $optionRequest->query->remove('status');
+        $statusOptions = $this->reports->statusOptions($type, $this->reports->query($type, $from, $to, $optionRequest));
         $data = $query->latest($this->dateColumn($type))->paginate(30)->withQueryString();
         $clients = Client::orderBy('full_name')->get(['id', 'full_name']);
         $sellers = SellerProfile::with('user')->where('status', 'active')->get();
 
-        return Inertia::render('Reports/Index', compact('type','from','to','summary','data','clients','sellers') + ['types'=>FinancialReportService::TYPES,'exportUrl'=>route('reports.export')]);
+        return Inertia::render('Reports/Index', compact('type','from','to','summary','analytics','statusOptions','data','clients','sellers') + [
+            'types' => FinancialReportService::TYPES,
+            'reportMeta' => $this->reports->reportMeta(),
+            'headings' => $this->reports->headings($type),
+            'rows' => $data->getCollection()->map(fn ($item) => ['id' => $item->getKey(), 'cells' => $this->reports->row($type, $item)]),
+            'filters' => $filters,
+            'exportUrl' => route('reports.export'),
+        ]);
     }
 
     public function export(Request $request): StreamedResponse

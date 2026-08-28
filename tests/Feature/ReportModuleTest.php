@@ -48,4 +48,25 @@ class ReportModuleTest extends TestCase
     {
         $this->get(route('reports.index', ['report_type' => 'inventado']))->assertSessionHasErrors('report_type');
     }
+
+    public function test_management_analytics_and_auditable_rows_use_the_filtered_dataset(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $client = Client::firstOrFail();
+
+        $this->get(route('reports.index', [
+            'report_type' => 'portfolio',
+            'start_date' => today()->subYear()->format('Y-m-d'),
+            'end_date' => today()->format('Y-m-d'),
+            'client' => $client->id,
+        ]))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Reports/Index')
+            ->where('analytics.records', $client->loans()->count())
+            ->has('analytics.trend')
+            ->has('analytics.distribution')
+            ->has('analytics.leaders')
+            ->has('headings', 8)
+            ->where('rows.0.id', $client->loans()->firstOrFail()->id)
+            ->has('rows.0.cells', 8));
+    }
 }

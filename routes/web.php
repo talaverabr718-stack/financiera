@@ -3,12 +3,14 @@
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AccountingDashboardController;
 use App\Http\Controllers\AccountingReportController;
+use App\Http\Controllers\AccountingPeriodController;
 use App\Http\Controllers\AmortizationCalculatorController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CollaboratorController;
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\CollectionRouteController;
+use App\Http\Controllers\CostCenterController;
 use App\Http\Controllers\CreditApplicationController;
 use App\Http\Controllers\CreditGuarantorController;
 use App\Http\Controllers\CreditHistoryController;
@@ -75,9 +77,17 @@ Route::middleware('auth')->group(function () {
         Route::get('/diario', [AccountingReportController::class, 'journal'])->name('journal');
         Route::get('/mayor', [AccountingReportController::class, 'ledger'])->name('ledger');
         Route::get('/balance-comprobacion', [AccountingReportController::class, 'trial'])->name('trial');
+        Route::get('/balance-general', [AccountingReportController::class, 'balanceSheet'])->name('balance-sheet');
+        Route::get('/estado-resultados', [AccountingReportController::class, 'incomeStatement'])->name('income-statement');
+        Route::get('/periodos', [AccountingPeriodController::class, 'index'])->name('periods.index');
+        Route::post('/periodos/{period}/cerrar', [AccountingPeriodController::class, 'close'])->name('periods.close');
+        Route::post('/periodos/{period}/reabrir', [AccountingPeriodController::class, 'reopen'])->name('periods.reopen');
+        Route::get('/centros-de-costo', [CostCenterController::class, 'index'])->name('cost-centers.index');
+        Route::post('/centros-de-costo', [CostCenterController::class, 'store'])->name('cost-centers.store');
+        Route::put('/centros-de-costo/{costCenter}', [CostCenterController::class, 'update'])->name('cost-centers.update');
     });
     Route::get('/reportes', [ReportController::class, 'index'])->middleware('module:reports')->name('reports.index');
-    Route::get('/reportes/exportar', [ReportController::class, 'export'])->name('reports.export');
+    Route::get('/reportes/exportar', [ReportController::class, 'export'])->middleware('module:reports')->name('reports.export');
     Route::prefix('configuracion')->name('settings.')->group(function () {
         Route::get('/', [SettingsController::class, 'index'])->name('index');
         Route::get('/general', [SettingsController::class, 'general'])->name('general');
