@@ -7,7 +7,7 @@ const money = value => new Intl.NumberFormat('es-NI', { minimumFractionDigits: 2
         <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
             <div class="flex flex-wrap items-center gap-3">
                 <span class="badge" :class="summary.in_arrears ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'">{{ summary.in_arrears ? 'En mora' : 'Al día' }}</span>
-                <p v-if="summary.in_arrears" class="text-sm text-slate-700"><span class="font-semibold">{{ summary.code || 'Sin código' }}</span> · {{ summary.current_days }} días · {{ summary.overdue_count }} cuotas · {{ currency }} {{ money(summary.overdue_balance) }}</p>
+                <p v-if="summary.in_arrears" class="text-sm text-slate-700"><span class="font-semibold">{{ summary.code || 'Sin código' }}</span> · {{ summary.current_days }} días · {{ summary.overdue_count }} cuotas · {{ currency }} {{ money(summary.overdue_balance) }} · mora {{ currency }} {{ money(summary.total_mora) }}</p>
                 <p v-else class="text-sm text-slate-500">Sin cuotas vencidas pendientes.</p>
             </div>
         </div>

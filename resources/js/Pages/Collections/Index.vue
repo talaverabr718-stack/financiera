@@ -1,14 +1,16 @@
 <script setup>
-import { computed, ref } from 'vue';
-import { router, useForm } from '@inertiajs/vue3';
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
+import { router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../Layouts/AppLayout.vue';
 import PaginationLinks from '../../components/ui/PaginationLinks.vue';
 import BaseModal from '../../components/ui/BaseModal.vue';
+import CollectionReceiptTicket from '../../components/collections/CollectionReceiptTicket.vue';
 
 const props = defineProps({
     date: String,
     routes: { type: Array, default: () => [] },
     collectedToday: [String, Number],
+    collectedTodayBreakdown: { type: Array, default: () => [] },
     paymentHistory: Object,
     upcomingVisits: Number,
     upcomingStops: Array,
@@ -19,7 +21,7 @@ const props = defineProps({
     storeTemplate: String,
 });
 
-const money = value => new Intl.NumberFormat('es-NI', { style: 'currency', currency: 'NIO' }).format(Number(value || 0));
+const money = (value, currency = 'NIO') => new Intl.NumberFormat('es-NI', { style: 'currency', currency }).format(Number(value || 0));
 const forms = new Map();
 const dateValue = computed(() => String(props.date || '').slice(0, 10));
 const agendaStops = computed(() => [...(props.selectedRoute?.stops || [])].sort((a, b) => Number(a.position) - Number(b.position)));
@@ -27,6 +29,7 @@ const collectibleLoans = stop => (stop.client?.loans || []).filter(loan => ['act
 const pendingCount = route => (route.stops || []).filter(stop => stop.status === 'pending').length;
 const duesFor = stop => stop.dues || { overdue: [], due_today: [], overdue_total: '0.00', due_today_total: '0.00', total: '0.00' };
 const hasDues = stop => Number(duesFor(stop).total || 0) > 0;
+const moraSuffix = item => Number(item?.mora || 0) > 0 ? ` · mora ${money(item.mora)}` : '';
 const shortDate = value => {
     if (!value) return '';
     const [year, month, day] = String(value).slice(0, 10).split('-');
@@ -46,6 +49,37 @@ const statusClass = status => ({
 }[status] || 'bg-slate-100 text-slate-600');
 
 const managingStop = ref(null);
+const collectedOpen = ref(false);
+const page = usePage();
+const receiptTicket = ref(null);
+let printStyle;
+
+watch(() => page.props.flash?.receipt, value => {
+    if (value) receiptTicket.value = value;
+}, { immediate: true });
+
+const openTicket = ticket => { receiptTicket.value = ticket; };
+const closeTicket = () => { receiptTicket.value = null; };
+const stopPrinting = () => {
+    document.documentElement.classList.remove('is-printing-collection-ticket');
+    printStyle?.remove();
+    printStyle = null;
+};
+const printReceipt = () => {
+    if (!receiptTicket.value) return;
+    stopPrinting();
+    document.documentElement.classList.add('is-printing-collection-ticket');
+    printStyle = document.createElement('style');
+    printStyle.textContent = '@page { size: 80mm auto; margin: 4mm; }';
+    document.head.appendChild(printStyle);
+    const done = () => {
+        stopPrinting();
+        window.removeEventListener('afterprint', done);
+    };
+    window.addEventListener('afterprint', done);
+    nextTick(() => window.setTimeout(() => window.print(), 40));
+};
+onUnmounted(stopPrinting);
 
 const formFor = stop => {
     if (!forms.has(stop.id)) {
@@ -83,8 +117,12 @@ const selectRoute = id => router.get('/cobranza', { date: dateValue.value, agend
             <input type="date" :value="dateValue" class="control m-0" @change="changeDate">
         </template>
 
-        <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div class="live-metric" data-tone="emerald"><p>Cobrado en la fecha</p><strong>{{ money(collectedToday) }}</strong></div>
+        <section class="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <button type="button" class="live-metric collected-metric text-left" data-tone="emerald" @click="collectedOpen = true">
+                <p>Cobrado en la fecha</p>
+                <strong>{{ money(collectedToday) }}</strong>
+                <small>{{ collectedTodayBreakdown.length ? 'Ver cobradores y clientes' : 'Sin cobros en esta fecha' }}</small>
+            </button>
             <div class="live-metric" data-tone="blue"><p>Visitas pendientes</p><strong>{{ pendingStops.length }}</strong></div>
             <div class="live-metric" data-tone="gold"><p>Próximas visitas</p><strong>{{ upcomingVisits }}</strong></div>
             <div class="live-metric" data-tone="rose"><p>Cuotas vencidas</p><strong>{{ lateCollections }}</strong></div>
@@ -113,42 +151,52 @@ const selectRoute = id => router.get('/cobranza', { date: dateValue.value, agend
                     </button>
                 </div>
 
-                <div class="divide-y">
-                    <article v-for="stop in agendaStops" :key="stop.id" class="p-5">
-                        <div class="flex justify-between gap-3">
-                            <div>
-                                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Parada {{ String(stop.position).padStart(2, '0') }} · {{ selectedRoute?.name }}</p>
-                                <a :href="`/clientes/${stop.client.id}`" class="mt-1 block font-semibold hover:underline">{{ stop.client.full_name }}</a>
-                                <p class="text-[10px] text-slate-400">{{ stop.client.address }}</p>
-                                <p v-if="stop.client.phone" class="text-[10px] text-slate-400">{{ stop.client.phone }}</p>
+                <div class="agenda-stop-list">
+                    <article v-for="stop in agendaStops" :key="stop.id" class="agenda-stop" :data-status="stop.status">
+                        <details>
+                            <summary class="agenda-stop-summary">
+                                <span class="agenda-stop-caret" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                </span>
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Parada {{ String(stop.position).padStart(2, '0') }} · {{ selectedRoute?.name }}</p>
+                                    <a :href="`/clientes/${stop.client.id}`" class="mt-1 block font-semibold hover:underline" @click.stop>{{ stop.client.full_name }}</a>
+                                    <p class="truncate text-[10px] text-slate-400">{{ [stop.client.neighborhood, stop.client.address].filter(Boolean).join(' · ') }}</p>
+                                    <p v-if="stop.client.phone" class="text-[10px] text-slate-400">{{ stop.client.phone }}</p>
+                                </div>
+                                <span class="badge h-fit shrink-0" :class="statusClass(stop.status)">{{ statusLabel(stop.status) }}</span>
+                            </summary>
+
+                            <div class="agenda-stop-panel">
+                                <div class="agenda-dues">
+                                    <p v-if="!hasDues(stop)" class="agenda-dues-empty">Sin cuotas vencidas ni cuota con vencimiento en esta fecha.</p>
+                                    <template v-else>
+                                        <div v-if="duesFor(stop).due_today.length" class="agenda-due is-today">
+                                            <header>
+                                                <span>Cuota de hoy</span>
+                                                <b>{{ money(duesFor(stop).due_today_total) }}</b>
+                                            </header>
+                                            <p v-for="item in duesFor(stop).due_today" :key="item.id">Cuota {{ item.number }} · {{ item.loan_number }} · vence {{ shortDate(item.due_date) }} · {{ money(item.outstanding) }}{{ moraSuffix(item) }}</p>
+                                        </div>
+                                        <div v-if="duesFor(stop).overdue.length" class="agenda-due is-overdue">
+                                            <header>
+                                                <span>Cuotas vencidas</span>
+                                                <b>{{ money(duesFor(stop).overdue_total) }}</b>
+                                            </header>
+                                            <p v-for="item in duesFor(stop).overdue" :key="item.id">Cuota {{ item.number }} · {{ item.loan_number }} · {{ item.days }} {{ item.days === 1 ? 'día' : 'días' }} · {{ money(item.outstanding) }}{{ moraSuffix(item) }}</p>
+                                        </div>
+                                        <p class="agenda-dues-total">A cobrar en esta visita: {{ money(duesFor(stop).total) }}</p>
+                                    </template>
+                                </div>
+
+                                <div v-if="stop.status === 'pending'" class="agenda-stop-actions">
+                                    <button type="button" class="btn-primary" @click="openManagement(stop)">Registrar gestión</button>
+                                </div>
+                                <div v-else-if="stop.ticket" class="agenda-stop-actions">
+                                    <button type="button" class="btn-secondary" @click="openTicket(stop.ticket)">Imprimir ticket</button>
+                                </div>
                             </div>
-                            <span class="badge h-fit" :class="statusClass(stop.status)">{{ statusLabel(stop.status) }}</span>
-                        </div>
-
-                        <div class="agenda-dues">
-                            <p v-if="!hasDues(stop)" class="agenda-dues-empty">Sin cuotas vencidas ni cuota con vencimiento en esta fecha.</p>
-                            <template v-else>
-                                <div v-if="duesFor(stop).due_today.length" class="agenda-due is-today">
-                                    <header>
-                                        <span>Cuota de hoy</span>
-                                        <b>{{ money(duesFor(stop).due_today_total) }}</b>
-                                    </header>
-                                    <p v-for="item in duesFor(stop).due_today" :key="item.id">Cuota {{ item.number }} · {{ item.loan_number }} · vence {{ shortDate(item.due_date) }} · {{ money(item.outstanding) }}</p>
-                                </div>
-                                <div v-if="duesFor(stop).overdue.length" class="agenda-due is-overdue">
-                                    <header>
-                                        <span>Cuotas vencidas</span>
-                                        <b>{{ money(duesFor(stop).overdue_total) }}</b>
-                                    </header>
-                                    <p v-for="item in duesFor(stop).overdue" :key="item.id">Cuota {{ item.number }} · {{ item.loan_number }} · {{ item.days }} {{ item.days === 1 ? 'día' : 'días' }} · {{ money(item.outstanding) }}</p>
-                                </div>
-                                <p class="agenda-dues-total">A cobrar en esta visita: {{ money(duesFor(stop).total) }}</p>
-                            </template>
-                        </div>
-
-                        <div v-if="stop.status === 'pending'" class="agenda-stop-actions">
-                            <button type="button" class="btn-primary" @click="openManagement(stop)">Registrar gestión</button>
-                        </div>
+                        </details>
                     </article>
                     <p v-if="!routes.length" class="empty-state">No hay rutas programadas para esta fecha.</p>
                     <p v-else-if="!agendaStops.length" class="empty-state">Esta ruta no tiene clientes asignados.</p>
@@ -161,7 +209,7 @@ const selectRoute = id => router.get('/cobranza', { date: dateValue.value, agend
                     <div class="mt-4 space-y-3">
                         <div v-for="installment in lateInstallments.slice(0, 6)" :key="installment.id" class="rounded-xl bg-white/5 p-3">
                             <p class="text-xs font-semibold">{{ installment.loan.client.full_name }}</p>
-                            <p class="mt-1 text-[10px] text-slate-300">{{ installment.loan.number }} · cuota {{ installment.number }}</p>
+                            <p class="mt-1 text-[10px] text-slate-300">{{ installment.loan.number }} · cuota {{ installment.number }} · {{ money(installment.outstanding) }}<template v-if="Number(installment.mora) > 0"> · mora {{ money(installment.mora) }}</template></p>
                         </div>
                         <p v-if="!lateInstallments.length" class="text-xs text-slate-300">Sin cuotas vencidas.</p>
                     </div>
@@ -170,17 +218,42 @@ const selectRoute = id => router.get('/cobranza', { date: dateValue.value, agend
                     <div class="section-heading"><h2 class="font-semibold">Historial reciente</h2></div>
                     <div class="divide-y">
                         <div v-for="record in paymentHistory.data.slice(0, 8)" :key="record.id" class="p-4">
-                            <div class="flex justify-between">
+                            <div class="flex justify-between gap-2">
                                 <p class="text-xs font-semibold">{{ record.client.full_name }}</p>
                                 <p class="text-xs font-semibold text-emerald-700">{{ record.amount ? money(record.amount) : record.outcome }}</p>
                             </div>
                             <p class="mt-1 text-[10px] text-slate-400">{{ record.stop?.route?.name }}</p>
+                            <button v-if="record.ticket" type="button" class="mt-2 text-[10px] font-semibold text-indigo-400 hover:underline" @click="openTicket(record.ticket)">Imprimir ticket</button>
                         </div>
                     </div>
                     <PaginationLinks :links="paymentHistory.links"/>
                 </section>
             </aside>
         </div>
+
+        <BaseModal
+            :open="collectedOpen"
+            title="Cobrado en la fecha"
+            :description="money(collectedToday)"
+            size="collection-modal"
+            @close="collectedOpen = false"
+        >
+            <div class="collected-day-panel">
+                <p v-if="!collectedTodayBreakdown.length" class="collected-day-empty">Aún no hay cobros registrados en esta fecha.</p>
+                <article v-for="group in collectedTodayBreakdown" :key="group.id" class="collected-day-group">
+                    <header>Cobrador · {{ group.collector }}</header>
+                    <p v-for="(row, index) in group.payments" :key="index">
+                        <span>{{ row.client }}</span>
+                        <span>{{ money(row.amount) }}</span>
+                    </p>
+                </article>
+            </div>
+            <template #footer>
+                <div class="flex justify-end">
+                    <button type="button" class="btn-secondary w-full sm:w-auto" @click="collectedOpen = false">Cerrar</button>
+                </div>
+            </template>
+        </BaseModal>
 
         <BaseModal
             :open="Boolean(managingStop)"
@@ -190,7 +263,11 @@ const selectRoute = id => router.get('/cobranza', { date: dateValue.value, agend
             @close="closeManagement"
         >
             <form v-if="managingStop && managementForm" id="collection-management-form" class="grid gap-3" @submit.prevent="submit(managingStop)">
-                <p v-if="hasDues(managingStop)" class="agenda-dues-total">A cobrar en esta visita: {{ money(duesFor(managingStop).total) }}</p>
+                <div v-if="hasDues(managingStop)" class="space-y-2">
+                    <p class="agenda-dues-total">A cobrar en esta visita: {{ money(duesFor(managingStop).total) }}</p>
+                    <p v-for="item in duesFor(managingStop).due_today" :key="`today-${item.id}`" class="text-[11px] text-slate-500">Cuota {{ item.number }} · vence hoy · {{ money(item.outstanding) }}{{ moraSuffix(item) }}</p>
+                    <p v-for="item in duesFor(managingStop).overdue" :key="`overdue-${item.id}`" class="text-[11px] text-rose-600">Cuota {{ item.number }} · {{ item.days }} {{ item.days === 1 ? 'día' : 'días' }} · {{ money(item.outstanding) }}{{ moraSuffix(item) }}</p>
+                </div>
                 <label class="field-label">Resultado
                     <select v-model="managementForm.outcome" class="control">
                         <option value="collected">Cobrado</option>
@@ -225,5 +302,26 @@ const selectRoute = id => router.get('/cobranza', { date: dateValue.value, agend
                 </div>
             </template>
         </BaseModal>
+
+        <BaseModal
+            :open="Boolean(receiptTicket)"
+            title="Pago registrado"
+            :description="receiptTicket ? `${receiptTicket.receipt_number} · ${receiptTicket.client || ''}` : ''"
+            size="collection-modal"
+            @close="closeTicket"
+        >
+            <CollectionReceiptTicket v-if="receiptTicket" :ticket="receiptTicket" :brand="page.props.brand"/>
+            <template #footer>
+                <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" class="btn-secondary w-full sm:w-auto" @click="closeTicket">Cerrar</button>
+                    <button type="button" class="btn-primary w-full sm:w-auto" @click="printReceipt">Imprimir ticket</button>
+                </div>
+            </template>
+        </BaseModal>
+        <Teleport to="body">
+            <div v-if="receiptTicket" class="collection-ticket-print" aria-hidden="true">
+                <CollectionReceiptTicket :ticket="receiptTicket" :brand="page.props.brand"/>
+            </div>
+        </Teleport>
     </AppLayout>
 </template>

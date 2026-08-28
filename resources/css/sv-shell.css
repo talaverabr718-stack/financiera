@@ -145,6 +145,7 @@ html, body { background: var(--sv-bg); color: var(--sv-text); }
 .modal-heading {
     background: radial-gradient(circle at 90% 0, rgba(91, 140, 255, .28), transparent 38%), linear-gradient(135deg, #101522, #0b101c) !important;
 }
+.modal-heading h2 { color: #f4f7ff; }
 .modal-panel .control,
 .modal-panel input:not([type='checkbox']):not([type='radio']):not([type='hidden']):not([type='file']),
 .modal-panel select,
@@ -476,6 +477,9 @@ html.theme-day .modal-panel {
 html.theme-day .modal-heading {
     background: radial-gradient(circle at 90% 0, rgba(29, 78, 216, .12), transparent 38%), #fff !important;
 }
+html.theme-day .modal-heading h2 { color: #0f172a !important; }
+html.theme-day .modal-heading p:not(.dark-kicker) { color: #64748b !important; }
+html.theme-day .modal-heading button { color: #0f172a !important; border-color: var(--sv-line) !important; background: #f8fafc !important; }
 html.theme-day .modal-panel .control,
 html.theme-day .modal-panel input:not([type='checkbox']):not([type='radio']):not([type='hidden']):not([type='file']),
 html.theme-day .modal-panel select,
@@ -622,6 +626,15 @@ html.theme-day .searchable-combobox-result.is-active {
     background: #eff6ff !important;
     color: #0f172a !important;
 }
+
+.client-form-hub .field-label,
+.client-form-hub .field-caption { color: #e8eef8 !important; }
+html.theme-day .client-form-hub .field-label,
+html.theme-day .client-form-hub .field-caption,
+html.theme-day .client-form-hub .field-label > .control,
+html.theme-day .client-form-hub .field-label > input,
+html.theme-day .client-form-hub .field-label > select,
+html.theme-day .client-form-hub .field-label > textarea { color: #0f172a !important; }
 
 html.theme-day .mb-4.rounded-xl.border.border-emerald-500\/30 { color: #047857 !important; background: #ecfdf5 !important; }
 

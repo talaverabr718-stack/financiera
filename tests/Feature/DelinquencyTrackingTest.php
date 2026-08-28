@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\CreditApplication;
+use App\Models\DelinquencyAccrual;
 use App\Models\DelinquencyCase;
 use App\Models\Loan;
 use App\Models\LoanInstallment;
@@ -290,7 +291,8 @@ class DelinquencyTrackingTest extends TestCase
                 ->where('delinquency.in_arrears', true)
                 ->has('delinquency.ledger', 1)
                 ->where('delinquency.active_cases.0.code', 'MORA-001')
-                ->where('delinquency.ledger.0.days_overdue', 6));
+                ->where('delinquency.ledger.0.days_overdue', 6)
+                ->where('delinquency.total_mora', '0.00'));
     }
 
     public function test_ledger_keeps_zero_interest_and_zero_monetary_delinquency_while_counting_days(): void
@@ -417,8 +419,8 @@ class DelinquencyTrackingTest extends TestCase
 
         $this->assertSame('120.00', (string) $installment->fresh()->delinquency_due);
         $this->assertSame('2.000000', (string) $loan->fresh()->delinquency_daily_rate);
-        $this->assertSame(1, \App\Models\DelinquencyAccrual::query()->where('installment_id', $installment->id)->where('status', 'reversed')->count());
-        $this->assertSame('120.00', (string) \App\Models\DelinquencyAccrual::query()->where('installment_id', $installment->id)->where('status', 'posted')->whereDoesntHave('reversal')->value('amount'));
+        $this->assertSame(1, DelinquencyAccrual::query()->where('installment_id', $installment->id)->where('status', 'reversed')->count());
+        $this->assertSame('120.00', (string) DelinquencyAccrual::query()->where('installment_id', $installment->id)->where('status', 'posted')->whereDoesntHave('reversal')->value('amount'));
     }
 
     public function test_cases_cannot_be_deleted(): void

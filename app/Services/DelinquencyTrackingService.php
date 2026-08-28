@@ -59,6 +59,7 @@ class DelinquencyTrackingService
             'timezone' => config('app.timezone'),
             'oldest_due_on' => $oldest ? $this->calendarDate($oldest->due_date) : null,
             'daily_rate' => $loan->delinquency_daily_rate,
+            'total_mora' => (string) $loan->delinquency_balance,
             'monetary_delinquency_enabled' => filled($loan->delinquency_daily_rate) || filled(config('financial.delinquency_method')),
             'installments' => $overdue->map(fn (LoanInstallment $installment) => $this->explainInstallment($installment, $asOf, $loan)),
             'ledger' => $loan->installments->sortBy('number')->values()->map(fn (LoanInstallment $installment) => $this->explainInstallment($installment, $asOf, $loan)),
@@ -100,8 +101,8 @@ class DelinquencyTrackingService
             'is_overdue' => $installment->isOverdueOn($asOf),
             'days_overdue' => $daysOverdue,
             'mora_label' => $daysOverdue > 0 ? $daysOverdue.' '.($daysOverdue === 1 ? 'día' : 'días') : '—',
-            'mora_amount' => (string) $installment->delinquency_due,
-            'mora_outstanding' => $this->moraOutstanding($installment),
+            'mora_amount' => $installment->moraOutstanding(),
+            'mora_outstanding' => $installment->moraOutstanding(),
             'settlement' => $settlement,
             'settlement_label' => $settlementLabel,
             'paid_on' => $paidOn,
@@ -172,6 +173,9 @@ class DelinquencyTrackingService
             'summaries' => $summaries,
             'ledger' => $summaries->flatMap(fn (array $summary) => $summary['ledger'])->values(),
             'active_cases' => $client->loans->map->activeDelinquencyCase->filter()->values(),
+            'current_days' => (int) $summaries->max('current_days'),
+            'overdue_balance' => $summaries->reduce(fn (string $total, array $summary) => bcadd($total, $summary['overdue_balance'], 2), '0.00'),
+            'total_mora' => $summaries->reduce(fn (string $total, array $summary) => bcadd($total, $summary['total_mora'] ?? '0.00', 2), '0.00'),
         ];
     }
 
@@ -438,8 +442,12 @@ class DelinquencyTrackingService
             $base = $this->moraBaseAmount($installment);
             $charge = $this->dailyPercentageCharge($base, $dailyRate, $days);
 
-            if (bccomp($base, '0.00', 2) !== 1) {
+            if (bccomp($base, '0.00', 2) !== 1 && $days > 0) {
                 $charge = (string) $installment->delinquency_due;
+            }
+
+            if (bccomp((string) $installment->delinquency_paid, $charge, 2) === 1) {
+                $charge = (string) $installment->delinquency_paid;
             }
 
             if (bccomp((string) $installment->delinquency_due, $charge, 2) !== 0) {
@@ -470,9 +478,7 @@ class DelinquencyTrackingService
 
     private function moraOutstanding(LoanInstallment $installment): string
     {
-        $outstanding = bcsub((string) $installment->delinquency_due, (string) $installment->delinquency_paid, 2);
-
-        return bccomp($outstanding, '0.00', 2) === 1 ? $outstanding : '0.00';
+        return $installment->moraOutstanding();
     }
 
     private function dailyPercentageCharge(string $base, string $dailyRatePercent, int $days): string

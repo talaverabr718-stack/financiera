@@ -20,10 +20,14 @@ class AuthenticationSecurityTest extends TestCase
 
     public function test_login_is_an_inertia_vue_page(): void
     {
-        $this->get(route('login'))->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->component('Auth/Login')
-            ->where('loginUrl', route('login.store'))
-        );
+        $this->get(route('login'))
+            ->assertOk()
+            ->assertSee('id="app"', false)
+            ->assertSee('data-page="app"', false)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Auth/Login')
+                ->where('loginUrl', route('login.store'))
+            );
     }
 
     public function test_user_can_authenticate_and_session_is_regenerated(): void
@@ -49,6 +53,7 @@ class AuthenticationSecurityTest extends TestCase
 
         $this->assertGuest();
     }
+
     public function test_active_user_can_authenticate_with_a_four_digit_pin(): void
     {
         $user = User::factory()->create(['pin' => '4829', 'is_active' => true]);

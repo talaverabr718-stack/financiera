@@ -1,6 +1,7 @@
 # Financiera repository guide
 
 - Laravel 12, PHP 8.2+, MySQL production and SQLite tests.
+- Do not switch stacks. Backend stays Laravel (Form Requests, policies, services/actions, Inertia). Frontend stays Vue 3 + Inertia + Tailwind 4 + Vite. Do not introduce React, Livewire, Blade page rewrites, or other UI/API frameworks.
 - Timezone `America/Managua`, locale `es`, base currency NIO.
 - Never hardcode interest, delinquency, payment priority, legal rates, taxes, or accounting accounts.
 - Financial records are immutable: use authorized reversals; never physically delete loans, installments, payments, disbursements, cash closings, or journal entries.

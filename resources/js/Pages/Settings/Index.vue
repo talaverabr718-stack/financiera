@@ -18,11 +18,11 @@ const props = defineProps({
 });
 
 const appearanceDefaults = {
-    theme: 'night',
-    primary_color: '#5b8cff',
-    sidebar_color: '#080b14',
-    accent_color: '#22d3ee',
-    background_color: '#05070d',
+    theme: 'day',
+    primary_color: '#1d4ed8',
+    sidebar_color: '#ffffff',
+    accent_color: '#0f766e',
+    background_color: '#f3f5f8',
     font_family: 'inter',
     density: 'comfortable',
     border_radius: 'soft',

@@ -67,9 +67,9 @@ class CollectionModuleTest extends TestCase
 
         $this->get(route('collections.index', ['date' => today()->format('Y-m-d')]))
             ->assertOk()->assertInertia(fn (Assert $page) => $page
-                ->component('Collections/Index')->where('upcomingVisits', 1)
-                ->where('upcomingStops.0.route.name', 'Ruta de mañana')
-                ->where('lateCollections', 1)->has('lateInstallments', 1));
+            ->component('Collections/Index')->where('upcomingVisits', 1)
+            ->where('upcomingStops.0.route.name', 'Ruta de mañana')
+            ->where('lateCollections', 1)->has('lateInstallments', 1));
     }
 
     public function test_agenda_route_selector_shows_the_selected_days_visits(): void
@@ -97,17 +97,17 @@ class CollectionModuleTest extends TestCase
 
         $this->get(route('collections.index', ['date' => today()->format('Y-m-d'), 'agenda_route' => $second->id]))
             ->assertOk()->assertInertia(fn (Assert $page) => $page
-                ->has('routes', 2)
-                ->where('selectedRoute.id', $second->id)
-                ->where('selectedRoute.name', 'Estelí Norte')
-                ->has('selectedRoute.stops', 1)
-                ->where('selectedRoute.stops.0.client_id', $otherClient->id)
-                ->where('selectedRoute.stops.0.client.full_name', 'Pedro Agenda Test'));
+            ->has('routes', 2)
+            ->where('selectedRoute.id', $second->id)
+            ->where('selectedRoute.name', 'Estelí Norte')
+            ->has('selectedRoute.stops', 1)
+            ->where('selectedRoute.stops.0.client_id', $otherClient->id)
+            ->where('selectedRoute.stops.0.client.full_name', 'Pedro Agenda Test'));
 
         $this->get(route('collections.index', ['date' => today()->format('Y-m-d')]))
             ->assertOk()->assertInertia(fn (Assert $page) => $page
-                ->has('routes', 2)
-                ->where('selectedRoute.id', CollectionRoute::query()->where('code', 'RUT-000001')->value('id')));
+            ->has('routes', 2)
+            ->where('selectedRoute.id', CollectionRoute::query()->where('code', 'RUT-000001')->value('id')));
     }
 
     public function test_route_clients_expose_overdue_and_due_installments_for_the_collector(): void
@@ -166,13 +166,18 @@ class CollectionModuleTest extends TestCase
         $route = CollectionRoute::with('stops')->firstOrFail();
         $stop = $route->stops->where('status', 'pending')->firstOrFail();
 
-        $this->actingAs($user)->post(route('collections.store', $stop), [
+        $response = $this->actingAs($user)->post(route('collections.store', $stop), [
             'outcome' => 'collected',
             'loan_id' => Loan::where('client_id', $stop->client_id)->firstOrFail()->id,
             'amount' => '750.00',
             'payment_method' => 'cash',
             'notes' => 'Pago recibido en domicilio',
-        ])->assertSessionHasNoErrors();
+        ]);
+        $response->assertSessionHasNoErrors()->assertSessionHas('receipt');
+        $receipt = session('receipt');
+        $this->assertIsArray($receipt);
+        $this->assertNotEmpty($receipt['receipt_number']);
+        $this->assertNotEmpty($receipt['installments']);
 
         $this->assertSame('visited', $stop->fresh()->status);
         $this->assertNotNull($stop->fresh()->visited_at);
@@ -182,12 +187,22 @@ class CollectionModuleTest extends TestCase
         $this->actingAs($user)->get(route('routes.index', [
             'date' => $route->scheduled_date->format('Y-m-d'),
             'route' => $route->id,
-        ]))->assertOk()->assertInertia(fn (Assert $page) => $page->where('selectedRoute.stops.0.status', 'visited'));
+        ]))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('selectedRoute.stops', fn ($stops) => collect($stops)->contains(fn ($item) => (int) $item['id'] === (int) $stop->id
+                && $item['status'] === 'visited'
+                && $item['paid_at_label'] === $visitLabel
+                && $item['visited_at_label'] === $visitLabel
+            )));
 
         $this->actingAs($user)->get(route('collections.index', [
             'date' => $route->scheduled_date->format('Y-m-d'),
             'agenda_route' => $route->id,
-        ]))->assertOk()->assertInertia(fn (Assert $page) => $page->has('paymentHistory.data'));
+        ]))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->has('paymentHistory.data')
+            ->where('selectedRoute.stops', fn ($stops) => collect($stops)->contains(fn ($item) => (int) $item['id'] === (int) $stop->id
+                && filled(data_get($item, 'ticket.receipt_number'))
+                && count(data_get($item, 'ticket.installments', [])) > 0
+            )));
         $record = CollectionRecord::firstOrFail();
         $this->assertSame('applied', $record->application_status);
         $this->assertSame('750.00', $record->amount);
@@ -214,7 +229,7 @@ class CollectionModuleTest extends TestCase
 
         $this->actingAs($user)->get(route('collections.index', ['date' => today()->format('Y-m-d')]))
             ->assertOk()->assertInertia(fn (Assert $page) => $page
-                ->where('paymentHistory.data.0.outcome', 'promise'));
+            ->where('paymentHistory.data.0.outcome', 'promise'));
     }
 
     public function test_payment_cannot_be_linked_to_another_clients_loan(): void
@@ -340,11 +355,11 @@ class CollectionModuleTest extends TestCase
 
         $this->get(route('collections.index', ['date' => today()->addDays(10)->format('Y-m-d')]))
             ->assertOk()->assertInertia(fn (Assert $page) => $page
-                ->component('Collections/Index')
-                ->where('routes', [])
-                ->where('selectedRoute', null)
-                ->where('pendingStops', [])
-                ->where('upcomingVisits', 0));
+            ->component('Collections/Index')
+            ->where('routes', [])
+            ->where('selectedRoute', null)
+            ->where('pendingStops', [])
+            ->where('upcomingVisits', 0));
     }
 
     public function test_due_on_the_agenda_date_is_not_classified_as_overdue(): void
@@ -429,14 +444,39 @@ class CollectionModuleTest extends TestCase
         $this->assertSame('delinquent', $loan->fresh()->status);
     }
 
+    public function test_collector_dues_include_applied_mora_on_each_overdue_installment(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $stop = CollectionRoute::with('stops')->firstOrFail()->stops->where('status', 'pending')->firstOrFail();
+        $loan = Loan::where('client_id', $stop->client_id)->firstOrFail();
+        $this->createInstallment($loan, 1, today()->subDays(2), '100.00', '0.00', [
+            'delinquency_due' => '15.00',
+        ]);
+        $loan->update(['delinquency_balance' => '15.00']);
+
+        $dues = $stop->fresh()->collectorDuesOn(today());
+
+        $this->assertSame('115.00', $dues['overdue'][0]['outstanding']);
+        $this->assertSame('15.00', $dues['overdue'][0]['mora']);
+        $this->assertSame('115.00', $dues['overdue_total']);
+        $this->assertSame('15.00', $dues['overdue_mora_total']);
+
+        $this->get(route('collections.index', ['date' => today()->format('Y-m-d'), 'agenda_route' => $stop->collection_route_id]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('selectedRoute.stops', fn ($stops) => collect($stops)->contains(fn ($item) => (int) $item['client_id'] === $stop->client_id
+                    && ($item['dues']['overdue'][0]['mora'] ?? null) === '15.00'
+                    && ($item['dues']['overdue_mora_total'] ?? null) === '15.00')));
+    }
+
     public function test_every_assigned_stop_exposes_dues_even_without_a_schedule(): void
     {
         $this->seed(ClientModuleSeeder::class);
 
         $this->get(route('collections.index', ['date' => today()->format('Y-m-d')]))
             ->assertOk()->assertInertia(fn (Assert $page) => $page
-                ->where('selectedRoute.stops', fn ($stops) => collect($stops)->every(fn ($item) => isset($item['dues']['overdue'], $item['dues']['due_today'], $item['dues']['total'])
-                    && $item['dues']['total'] === '0.00')));
+            ->where('selectedRoute.stops', fn ($stops) => collect($stops)->every(fn ($item) => isset($item['dues']['overdue'], $item['dues']['due_today'], $item['dues']['total'])
+                && $item['dues']['total'] === '0.00')));
     }
 
     public function test_collected_requires_amount_loan_and_rejects_zero(): void
@@ -579,7 +619,12 @@ class CollectionModuleTest extends TestCase
 
         $this->get(route('collections.index', ['date' => today()->format('Y-m-d')]))
             ->assertOk()->assertInertia(fn (Assert $page) => $page
-                ->where('collectedToday', fn ($value) => (string) $value === '125.50' || (float) $value === 125.5));
+            ->where('collectedToday', fn ($value) => (string) $value === '125.50' || (float) $value === 125.5)
+            ->where('collectedTodayBreakdown', fn ($groups) => count($groups) === 1
+                && filled($groups[0]['collector'])
+                && count($groups[0]['payments']) === 1
+                && filled($groups[0]['payments'][0]['client'])
+                && ((string) $groups[0]['payments'][0]['amount'] === '125.50' || (float) $groups[0]['payments'][0]['amount'] === 125.5)));
     }
 
     public function test_invalid_outcome_is_rejected(): void

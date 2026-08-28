@@ -10,7 +10,7 @@ use App\Models\Guarantor;
 use App\Models\Loan;
 use App\Models\SellerProfile;
 use App\Services\CreditApplicationService;
-use Carbon\Carbon;
+use App\Support\OperationalMesa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -28,6 +28,7 @@ class CreditApplicationController extends Controller
 
         return Inertia::render('Applications/Index', [
             'applications' => $applications,
+            'board' => $this->directoryBoard(),
             'filters' => $request->only('search', 'status'),
             'endpoints' => ['index' => route('applications.index'), 'create' => route('applications.create')],
         ]);
@@ -203,5 +204,36 @@ class CreditApplicationController extends Controller
                 'save' => $application->exists ? route('applications.update', $application) : route('applications.store'),
             ],
         ]);
+    }
+
+    private function directoryBoard(): array
+    {
+        $base = CreditApplication::query();
+        $labels = ['draft' => 'Borrador', 'submitted' => 'Enviada', 'review' => 'En revisión', 'approved' => 'Aprobada', 'rejected' => 'Rechazada', 'cancelled' => 'Cancelada', 'disbursed' => 'Desembolsada'];
+        $tones = ['draft' => 'muted', 'submitted' => 'info', 'review' => 'warn', 'approved' => 'ok', 'rejected' => 'bad', 'cancelled' => 'muted', 'disbursed' => 'gold'];
+        $counts = (clone $base)->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
+        $total = (int) $counts->sum();
+        $pipeline = (int) $counts->only(['draft', 'submitted', 'review'])->sum();
+        $approved = (int) ($counts['approved'] ?? 0);
+        $disbursed = (int) ($counts['disbursed'] ?? 0);
+        $situation = $total === 0
+            ? 'Todavía no hay solicitudes registradas.'
+            : "{$total} solicitud".($total === 1 ? '' : 'es')." · {$pipeline} en trámite · {$approved} aprobada".($approved === 1 ? '' : 's')." · {$disbursed} desembolsada".($disbursed === 1 ? '' : 's');
+
+        return [
+            'briefing' => [
+                'title' => 'Solicitudes',
+                'date_label' => OperationalMesa::dateLabel(),
+                'situation' => $situation,
+            ],
+            'stats' => ['total' => $total],
+            'mix' => collect($labels)->map(fn ($label, $key) => [
+                'key' => $key,
+                'tone' => $tones[$key],
+                'label' => $label,
+                'value' => (int) ($counts[$key] ?? 0),
+            ])->values()->all(),
+            'growth' => OperationalMesa::monthlyGrowth($base, 'created_at'),
+        ];
     }
 }
