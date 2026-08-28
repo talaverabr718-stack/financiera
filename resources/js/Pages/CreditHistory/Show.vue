@@ -42,7 +42,7 @@ watch(() => props.loans, loans => {
                             <div>
                                 <p class="font-bold text-slate-800">{{ loan.number }}</p>
                                 <p class="mt-1 text-[11px] text-slate-400">{{ loan.product || 'Sin producto' }} · {{ loan.disbursed_at || 'Sin desembolso' }}</p>
-                                <p class="mt-1 font-mono text-xs">{{ money(loan.principal, loan.currency) }}</p>
+                                <p class="mt-1 font-mono text-xs">{{ money(loan.principal, loan.currency) }}<template v-if="Number(loan.mora) > 0"> · mora {{ money(loan.mora, loan.currency) }}</template></p>
                             </div>
                             <span class="rounded-full px-2 py-1 text-[10px] font-bold uppercase" :class="loan.status === 'paid' ? 'bg-emerald-50 text-emerald-700' : loan.status === 'delinquent' ? 'bg-rose-50 text-rose-700' : 'bg-indigo-50 text-indigo-700'">{{ statusLabel(loan.status) }}</span>
                         </button>
@@ -53,7 +53,7 @@ watch(() => props.loans, loans => {
                     <div class="flex items-start justify-between gap-3 border-b px-5 py-4">
                         <div>
                             <h2 class="text-sm font-semibold">Historial de pago</h2>
-                            <p class="mt-1 text-[11px] text-slate-400">{{ selected ? `${selected.number} · saldo ${money(selected.outstanding, selected.currency)}` : 'Elige un crédito.' }}</p>
+                            <p class="mt-1 text-[11px] text-slate-400">{{ selected ? `${selected.number} · saldo ${money(selected.outstanding, selected.currency)}${Number(selected.mora) > 0 ? ` · mora ${money(selected.mora, selected.currency)}` : ''}` : 'Elige un crédito.' }}</p>
                         </div>
                         <a v-if="selected" :href="selected.show_url" class="text-xs font-semibold text-indigo-600">Ver en cartera</a>
                     </div>

@@ -7,6 +7,7 @@ use App\Http\Requests\RecalculateLoanDelinquencyRequest;
 use App\Models\DelinquencyCase;
 use App\Models\Loan;
 use App\Services\DelinquencyTrackingService;
+use App\Support\OperationalMesa;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -51,9 +52,48 @@ class DelinquencyCaseController extends Controller
         };
 
         $cases = $cases->orderBy('id')->paginate(15)->withQueryString();
+        $base = DelinquencyCase::query();
+        $active = (clone $base)->where('status', DelinquencyCase::STATUS_ACTIVE)->count();
+        $resolved = (clone $base)->where('status', DelinquencyCase::STATUS_RESOLVED)->count();
+        $cancelled = (clone $base)->where('status', DelinquencyCase::STATUS_CANCELLED)->count();
+        $total = $active + $resolved + $cancelled;
+        $aging = [
+            ['label' => '1-7d', 'min' => 1, 'max' => 7],
+            ['label' => '8-30d', 'min' => 8, 'max' => 30],
+            ['label' => '31-60d', 'min' => 31, 'max' => 60],
+            ['label' => '60d+', 'min' => 61, 'max' => null],
+        ];
+        $buckets = [];
+        foreach ($aging as $band) {
+            $count = (clone $base)->where('status', DelinquencyCase::STATUS_ACTIVE)
+                ->where('current_days', '>=', $band['min'])
+                ->when($band['max'], fn ($query) => $query->where('current_days', '<=', $band['max']))
+                ->count();
+            $buckets[] = ['label' => $band['label'], 'added' => $count];
+        }
+        $situation = $total === 0
+            ? 'No hay expedientes de mora. Recalcula para armar el listado con cuotas vencidas e impagas.'
+            : "{$total} expediente".($total === 1 ? '' : 's')." · {$active} activo".($active === 1 ? '' : 's')." · {$resolved} resuelto".($resolved === 1 ? '' : 's');
 
         return Inertia::render('Delinquency/Index', [
             'cases' => $cases,
+            'board' => [
+                'briefing' => [
+                    'title' => 'Clientes en mora',
+                    'date_label' => OperationalMesa::dateLabel(),
+                    'situation' => $situation,
+                ],
+                'stats' => ['total' => $total],
+                'mix' => [
+                    ['key' => 'active', 'tone' => 'bad', 'label' => 'En mora', 'value' => $active],
+                    ['key' => 'resolved', 'tone' => 'ok', 'label' => 'Resueltos', 'value' => $resolved],
+                    ['key' => 'cancelled', 'tone' => 'muted', 'label' => 'Cancelados', 'value' => $cancelled],
+                ],
+                'growth' => array_merge(OperationalMesa::runningPoints($buckets), [
+                    'delta' => $active,
+                    'added' => $active,
+                ]),
+            ],
             'filters' => [
                 'search' => $request->input('search', ''),
                 'status' => $request->input('status', 'active'),

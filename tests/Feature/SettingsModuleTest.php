@@ -45,7 +45,7 @@ class SettingsModuleTest extends TestCase
         $this->get(route('settings.index'))->assertOk()->assertInertia(fn (Assert $page) => $page
             ->where('appearance.primary_color', '#0f766e')
             ->where('appearance.density', 'compact')
-            ->where('appearance.theme', 'night'));
+            ->where('appearance.theme', 'day'));
     }
 
     public function test_appearance_can_switch_to_the_light_office_theme(): void

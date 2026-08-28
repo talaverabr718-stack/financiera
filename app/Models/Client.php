@@ -14,7 +14,7 @@ class Client extends Model
 
     protected function casts(): array
     {
-        return ['birth_date' => 'date', 'estimated_income' => 'decimal:2', 'estimated_expenses' => 'decimal:2'];
+        return ['birth_date' => 'date:Y-m-d', 'estimated_income' => 'decimal:2', 'estimated_expenses' => 'decimal:2'];
     }
 
     public function portfolioAssignments()

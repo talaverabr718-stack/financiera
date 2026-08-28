@@ -29,7 +29,7 @@ class HandleInertiaRequests extends Middleware
                 'logo_url' => filled($brand['logo_path'] ?? null) ? route('settings.logo') : null,
             ],
             'appearance' => array_merge(
-                ['theme' => 'night'],
+                ['theme' => 'day'],
                 $settings->get('appearance', []) ?: [],
             ),
             'routes' => [
@@ -38,6 +38,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'flash' => [
                 'success' => $request->session()->get('success'),
+                'receipt' => $request->session()->get('receipt'),
             ],
         ];
     }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 
 class CollectionRoute extends Model
@@ -23,10 +24,12 @@ class CollectionRoute extends Model
         return $this->hasMany(CollectionRouteStop::class)->orderBy('position');
     }
 
-    public function withCollectorDues(\Carbon\CarbonInterface $asOf): self
+    public function withCollectorDues(CarbonInterface $asOf): self
     {
         $this->stops->each(function (CollectionRouteStop $stop) use ($asOf) {
             $stop->setAttribute('dues', $stop->collectorDuesOn($asOf));
+            $stop->setAttribute('visited_at_label', $stop->visitedAtLabel());
+            $stop->setAttribute('paid_at_label', $stop->paidAtLabel());
         });
 
         return $this;

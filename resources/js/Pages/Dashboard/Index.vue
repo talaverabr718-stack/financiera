@@ -375,7 +375,7 @@ const closeDailyReport = () => { reportOpen.value = false; };
                             <div>
                                 <p>Prioridad de recaudo</p>
                                 <h3>{{ featured.client }}</h3>
-                                <small>{{ featured.place }} · {{ featured.days }} días · {{ featured.loan_number }}</small>
+                                <small>{{ featured.place }} · {{ featured.days }} días · {{ featured.loan_number }}<template v-if="Number(featured.mora) > 0"> · mora {{ moneyExact(featured.mora) }}</template></small>
                             </div>
                             <b>{{ moneyExact(featured.outstanding) }}</b>
                         </Link>
@@ -392,7 +392,7 @@ const closeDailyReport = () => { reportOpen.value = false; };
                     <Link v-for="item in watchRest" :key="item.id" :href="item.loan_url" class="mesa-watch-row">
                         <span>
                             <strong>{{ item.client }}</strong>
-                            <small>{{ item.place || 'Estelí' }} · {{ item.loan_number }} · cuota {{ item.installment }}</small>
+                            <small>{{ item.place || 'Estelí' }} · {{ item.loan_number }} · cuota {{ item.installment }}<template v-if="Number(item.mora) > 0"> · mora {{ moneyExact(item.mora) }}</template></small>
                         </span>
                         <em :data-bucket="item.bucket">{{ item.days }} d</em>
                         <b>{{ moneyExact(item.outstanding) }}</b>

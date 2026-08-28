@@ -20,14 +20,27 @@ let clockTimer;
 
 const initials = computed(() => (page.props.auth.user?.name ?? 'A').split(/\s+/).slice(0, 2).map(value => value.charAt(0)).join('').toUpperCase());
 const today = new Intl.DateTimeFormat('es-NI', { weekday: 'short', day: '2-digit', month: 'short' }).format(new Date());
-const fontFamilies = { instrument: "'Manrope', sans-serif", inter: "'Manrope', sans-serif", system: 'system-ui, sans-serif', humanist: 'Optima, Candara, sans-serif', nunito: "'Nunito', sans-serif", poppins: "'Poppins', sans-serif", roboto: "'Roboto', sans-serif", lato: "'Lato', sans-serif", serif: 'ui-serif, Georgia, serif', merriweather: "'Merriweather', Georgia, serif", georgia: 'Georgia, serif', mono: 'ui-monospace, monospace' };
+const fontFamilies = {
+    instrument: "'Manrope', sans-serif",
+    inter: "'Inter', ui-sans-serif, system-ui, sans-serif",
+    system: 'system-ui, sans-serif',
+    humanist: 'Optima, Candara, sans-serif',
+    nunito: "'Nunito', sans-serif",
+    poppins: "'Poppins', sans-serif",
+    roboto: "'Roboto', sans-serif",
+    lato: "'Lato', sans-serif",
+    serif: 'ui-serif, Georgia, serif',
+    merriweather: "'Merriweather', Georgia, serif",
+    georgia: 'Georgia, serif',
+    mono: 'ui-monospace, monospace',
+};
 const theme = computed(() => page.props.appearance?.theme === 'day' ? 'day' : 'night');
 const appearanceStyle = computed(() => ({
     '--app-primary': page.props.appearance?.primary_color || (theme.value === 'day' ? '#1d4ed8' : '#5b8cff'),
     '--app-night-soft': page.props.appearance?.sidebar_color || (theme.value === 'day' ? '#ffffff' : '#080b14'),
     '--app-accent': page.props.appearance?.accent_color || (theme.value === 'day' ? '#0f766e' : '#22d3ee'),
     '--app-canvas': page.props.appearance?.background_color || (theme.value === 'day' ? '#f3f5f8' : '#05070d'),
-    fontFamily: fontFamilies[page.props.appearance?.font_family] || "'Manrope', sans-serif",
+    fontFamily: fontFamilies[page.props.appearance?.font_family] || fontFamilies.inter,
 }));
 const shellStyle = computed(() => ({
     ...appearanceStyle.value,

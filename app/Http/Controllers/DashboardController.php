@@ -11,6 +11,7 @@ use App\Models\Loan;
 use App\Models\LoanInstallment;
 use App\Models\Payment;
 use App\Models\SellerProfile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
@@ -25,7 +26,7 @@ class DashboardController extends Controller
         $now = now()->timezone(config('app.timezone'));
         $loans = Loan::query();
         $stats = [
-            'activePortfolio' => (clone $loans)->whereIn('status', Loan::COLLECTIBLE_STATUSES)->selectRaw('COALESCE(SUM(principal_balance + interest_balance + fee_balance),0) total')->value('total'),
+            'activePortfolio' => (clone $loans)->whereIn('status', Loan::COLLECTIBLE_STATUSES)->selectRaw('COALESCE(SUM(principal_balance + interest_balance + fee_balance + delinquency_balance),0) total')->value('total'),
             'placed' => (clone $loans)->whereBetween('disbursed_at', [now()->startOfMonth(), now()->endOfMonth()])->sum('principal'),
             'placedLastMonth' => (clone $loans)->whereBetween('disbursed_at', [now()->subMonthNoOverflow()->startOfMonth(), now()->subMonthNoOverflow()->endOfMonth()])->sum('principal'),
             'collectedToday' => CollectionRecord::where('outcome', 'collected')->whereDate('recorded_at', today())->sum('amount'),
@@ -172,6 +173,7 @@ class DashboardController extends Controller
                     'due_date' => $installment->due_date?->toDateString(),
                     'days' => $days,
                     'outstanding' => $installment->outstandingAmount(),
+                    'mora' => $installment->moraOutstanding(),
                     'bucket' => $days <= 7 ? '1-7' : ($days <= 30 ? '8-30' : '31+'),
                 ];
             });
@@ -513,7 +515,7 @@ class DashboardController extends Controller
         };
     }
 
-    private function collectorBoard(): \Illuminate\Support\Collection
+    private function collectorBoard(): Collection
     {
         $todayRoutes = CollectionRoute::with(['stops', 'collector.user', 'collector.zone'])
             ->whereDate('scheduled_date', today())
@@ -556,7 +558,7 @@ class DashboardController extends Controller
         })->sortByDesc('amount')->values();
     }
 
-    private function paymentMix(): \Illuminate\Support\Collection
+    private function paymentMix(): Collection
     {
         $raw = CollectionRecord::query()
             ->where('outcome', 'collected')
@@ -576,7 +578,7 @@ class DashboardController extends Controller
             ->values();
     }
 
-    private function neighborhoods(\Illuminate\Support\Collection $todayStops, \Illuminate\Support\Collection $overdueInstallments): \Illuminate\Support\Collection
+    private function neighborhoods(Collection $todayStops, Collection $overdueInstallments): Collection
     {
         $places = collect();
         foreach ($todayStops as $stop) {

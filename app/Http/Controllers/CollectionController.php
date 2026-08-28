@@ -7,8 +7,10 @@ use App\Models\CollectionRoute;
 use App\Models\CollectionRouteStop;
 use App\Models\Loan;
 use App\Models\LoanInstallment;
+use App\Services\CollectionReceiptPresenter;
 use App\Services\PaymentApplicationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -17,21 +19,51 @@ use Inertia\Inertia;
 
 class CollectionController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, CollectionReceiptPresenter $receipts)
     {
         $date = $request->date('date') ?? today();
-        $routes = CollectionRoute::with(['collector.user', 'stops.client.loans.installments'])
+        $routes = CollectionRoute::with([
+            'collector.user',
+            'stops.client.loans.installments',
+            'stops.records' => fn ($query) => $query->where('outcome', 'collected')->whereNotNull('payment_id')->latest('recorded_at'),
+            'stops.records.payment.client',
+            'stops.records.payment.loan',
+            'stops.records.payment.collector',
+            'stops.records.payment.creator',
+            'stops.records.payment.allocations.installment',
+        ])
             ->whereDate('scheduled_date', $date)->orderBy('starts_at')->get();
-        $collectedToday = CollectionRecord::query()
+        $collectedRecords = CollectionRecord::query()
+            ->with(['client', 'collector.user'])
             ->where('outcome', 'collected')
             ->whereDate('recorded_at', $date)
-            ->sum('amount');
-        $paymentHistory = CollectionRecord::with(['client', 'loan', 'payment', 'collector.user', 'recordedBy', 'stop.route'])
+            ->orderBy('recorded_at')
+            ->get();
+        $collectedToday = $collectedRecords->reduce(
+            fn (string $total, CollectionRecord $record) => bcadd($total, (string) $record->amount, 2),
+            '0.00',
+        );
+        $collectedTodayBreakdown = $this->collectedTodayBreakdown($collectedRecords);
+        $paymentHistory = CollectionRecord::with([
+            'client',
+            'loan',
+            'payment.client',
+            'payment.loan',
+            'payment.collector',
+            'payment.creator',
+            'payment.allocations.installment',
+            'collector.user',
+            'recordedBy',
+            'stop.route',
+        ])
             ->when($request->filled('client'), fn ($q) => $q->where('client_id', $request->integer('client')))
             ->when($request->filled('route'), fn ($q) => $q->whereHas('stop', fn ($q) => $q->where('collection_route_id', $request->integer('route'))))
             ->when($request->filled('collector'), fn ($q) => $q->where('collector_id', $request->integer('collector')))
             ->when($request->filled('outcome'), fn ($q) => $q->where('outcome', $request->string('outcome')))
             ->latest('recorded_at')->paginate(20)->withQueryString();
+        $paymentHistory->getCollection()->each(function (CollectionRecord $record) use ($receipts): void {
+            $record->setAttribute('ticket', $record->payment ? $receipts->fromPayment($record->payment) : null);
+        });
         $pendingStops = CollectionRouteStop::query()
             ->with(['client.loans.installments', 'route.collector.user'])
             ->where('status', 'pending')
@@ -57,14 +89,27 @@ class CollectionController extends Controller
             ->get()
             ->filter(fn (LoanInstallment $installment) => $installment->isOverdueOn($date))
             ->values();
+        $lateInstallments->each(function (LoanInstallment $installment): void {
+            $installment->setAttribute('mora', $installment->moraOutstanding());
+            $installment->setAttribute('outstanding', $installment->outstandingAmount());
+        });
         $lateCollections = $lateInstallments->count();
         $selectedRoute = $routes->firstWhere('id', $request->integer('agenda_route')) ?? $routes->first();
-        $routes->each(fn (CollectionRoute $route) => $route->withCollectorDues($date));
+        $routes->each(function (CollectionRoute $route) use ($date, $receipts): void {
+            $route->withCollectorDues($date);
+            $route->stops->each(function (CollectionRouteStop $stop) use ($receipts): void {
+                $payment = $stop->records
+                    ->first(fn (CollectionRecord $record) => $record->outcome === 'collected' && $record->payment)
+                    ?->payment;
+                $stop->setAttribute('ticket', $payment ? $receipts->fromPayment($payment) : null);
+                $stop->unsetRelation('records');
+            });
+        });
 
-        return Inertia::render('Collections/Index', compact('date', 'routes', 'collectedToday', 'paymentHistory', 'upcomingVisits', 'upcomingStops', 'pendingStops', 'lateCollections', 'lateInstallments', 'selectedRoute') + ['storeTemplate' => route('collections.store',['stop'=>'__STOP__'])]);
+        return Inertia::render('Collections/Index', compact('date', 'routes', 'collectedToday', 'collectedTodayBreakdown', 'paymentHistory', 'upcomingVisits', 'upcomingStops', 'pendingStops', 'lateCollections', 'lateInstallments', 'selectedRoute') + ['storeTemplate' => route('collections.store', ['stop' => '__STOP__'])]);
     }
 
-    public function store(Request $request, CollectionRouteStop $stop, PaymentApplicationService $payments)
+    public function store(Request $request, CollectionRouteStop $stop, PaymentApplicationService $payments, CollectionReceiptPresenter $receipts)
     {
         $stop->load('route.collector');
         $data = $request->validate([
@@ -88,7 +133,9 @@ class CollectionController extends Controller
             'payment_method.required_if' => 'Selecciona la forma de pago.',
         ]);
 
-        DB::transaction(function () use ($data, $stop, $payments): void {
+        $ticket = null;
+
+        DB::transaction(function () use ($data, $stop, $payments, $receipts, &$ticket): void {
             $stop = CollectionRouteStop::query()->with('route.collector')->lockForUpdate()->findOrFail($stop->id);
 
             if ($stop->status !== 'pending') {
@@ -112,7 +159,8 @@ class CollectionController extends Controller
             ]);
 
             if ($data['outcome'] === 'collected') {
-                $payments->applyCollection($record->load('collector'));
+                $payment = $payments->applyCollection($record->load('collector'));
+                $ticket = $receipts->fromPayment($payment);
             }
 
             $stop->update([
@@ -134,8 +182,43 @@ class CollectionController extends Controller
             }
         });
 
-        return back()->with('success', $data['outcome'] === 'collected'
+        $redirect = back()->with('success', $data['outcome'] === 'collected'
             ? 'Cobro aplicado a cartera y ruta actualizada.'
             : 'Gestión de cobranza registrada y ruta actualizada.');
+
+        if ($ticket) {
+            $redirect->with('receipt', $ticket);
+        }
+
+        return $redirect;
+    }
+
+    /**
+     * @param  Collection<int, CollectionRecord>  $records
+     * @return list<array{id: int, collector: string, amount: string, payments: list<array{client: string, amount: string}>}>
+     */
+    private function collectedTodayBreakdown($records): array
+    {
+        return $records
+            ->groupBy(fn (CollectionRecord $record) => $record->collector_id ?: 0)
+            ->map(function ($group) {
+                $collector = $group->first()?->collector;
+
+                return [
+                    'id' => $collector?->id ?: 0,
+                    'collector' => $collector?->display_name ?: 'Sin cobrador',
+                    'amount' => $group->reduce(
+                        fn (string $total, CollectionRecord $record) => bcadd($total, (string) $record->amount, 2),
+                        '0.00',
+                    ),
+                    'payments' => $group->map(fn (CollectionRecord $record) => [
+                        'client' => $record->client?->full_name ?: 'Cliente',
+                        'amount' => (string) $record->amount,
+                    ])->values()->all(),
+                ];
+            })
+            ->sortBy('collector')
+            ->values()
+            ->all();
     }
 }

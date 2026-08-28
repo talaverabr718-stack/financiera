@@ -10,10 +10,12 @@ use App\Models\CollectionRouteStop;
 use App\Models\SellerProfile;
 use App\Services\AuditService;
 use App\Services\DocumentSequenceService;
+use App\Support\OperationalMesa;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -23,13 +25,27 @@ class CollectionRouteController extends Controller
     public function index(Request $request)
     {
         $date = $request->date('date') ?? today();
-        $routes = CollectionRoute::with(['collector.user', 'stops.client.loans.installments'])
+        $routes = CollectionRoute::with([
+            'collector.user',
+            'stops.client.loans.installments',
+            'stops.records' => fn ($query) => $query->where('outcome', 'collected')->latest('recorded_at'),
+        ])
             ->whereDate('scheduled_date', $date)->orderBy('starts_at')->get();
         $openRoutes = $routes->filter->isOpenForField()->values();
         $completedRoutes = $routes->reject->isOpenForField()->values();
         $requested = $routes->firstWhere('id', $request->integer('route'));
         $selectedRoute = $requested ?? $openRoutes->first();
-        $routes->each(fn (CollectionRoute $route) => $route->withCollectorDues($date));
+        $routes->each(function (CollectionRoute $route) use ($date): void {
+            $route->withCollectorDues($date);
+            $route->stops->each(fn (CollectionRouteStop $stop) => $stop->unsetRelation('records'));
+        });
+
+        $stops = $routes->flatMap->stops;
+        $visited = $stops->where('status', 'visited')->count();
+        $pending = $stops->where('status', 'pending')->count();
+        $situation = $routes->isEmpty()
+            ? 'No hay rutas programadas para esta fecha.'
+            : $routes->count().' ruta'.($routes->count() === 1 ? '' : 's')." · {$visited} visita".($visited === 1 ? '' : 's')." · {$pending} pendiente".($pending === 1 ? '' : 's');
 
         return Inertia::render('Routes/Index', [
             'routes' => $routes,
@@ -38,7 +54,20 @@ class CollectionRouteController extends Controller
             'selectedRoute' => $selectedRoute,
             'date' => $date,
             'googleMapsKey' => config('services.google_maps.key'),
-            'endpoints' => ['index' => route('routes.index'), 'create' => route('routes.create'), 'visitTemplate' => route('routes.stops.visit',['stop'=>'__STOP__'])],
+            'board' => [
+                'briefing' => [
+                    'title' => 'Rutas de cobranza',
+                    'date_label' => OperationalMesa::dateLabel(),
+                    'situation' => $situation,
+                ],
+                'stats' => ['total' => $visited],
+                'bars' => $routes->values()->map(fn (CollectionRoute $route) => [
+                    'key' => $route->id,
+                    'label' => Str::limit($route->name, 12, ''),
+                    'value' => $route->stops->where('status', 'visited')->count(),
+                ])->all(),
+            ],
+            'endpoints' => ['index' => route('routes.index'), 'create' => route('routes.create'), 'visitTemplate' => route('routes.stops.visit', ['stop' => '__STOP__'])],
         ]);
     }
 
@@ -178,12 +207,13 @@ class CollectionRouteController extends Controller
     {
         $selectedIds = $route->exists ? $route->stops->pluck('client_id')->all() : [];
         $lockedIds = $route->exists ? $route->stops->filter(fn ($stop) => $stop->records->isNotEmpty())->pluck('client_id')->all() : [];
+
         return Inertia::render('Routes/Form', [
             'route' => $route,
             'sellers' => SellerProfile::with('user')->where('status', 'active')->whereJsonContains('capabilities', 'collections')->get(),
             'clients' => Client::with('activeAssignment')->where('status', 'active')->orderBy('full_name')->get(),
             'selectedIds' => $selectedIds, 'lockedIds' => $lockedIds, 'editing' => $route->exists,
-            'endpoints' => ['index' => route('routes.index'), 'save' => $route->exists ? route('routes.update',$route) : route('routes.store')],
+            'endpoints' => ['index' => route('routes.index'), 'save' => $route->exists ? route('routes.update', $route) : route('routes.store')],
         ]);
     }
 }

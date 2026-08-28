@@ -15,7 +15,7 @@ class UpdateAppearanceSettingsRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
-            'theme' => $this->input('theme', 'night') ?: 'night',
+            'theme' => $this->input('theme', 'day') ?: 'day',
         ]);
     }
 

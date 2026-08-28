@@ -108,6 +108,16 @@ class CollectionRouteModuleTest extends TestCase
             'auditable_id' => $stop->id,
             'action' => 'route_stop_visited',
         ]);
+
+        $this->actingAs($user)->get(route('routes.index', [
+            'date' => $stop->route->scheduled_date->format('Y-m-d'),
+            'route' => $stop->collection_route_id,
+        ]))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('selectedRoute.stops', fn ($stops) => collect($stops)->contains(fn ($item) => (int) $item['id'] === (int) $stop->id
+                && $item['status'] === 'visited'
+                && $item['visited_at_label'] === $stop->fresh()->visitedAtLabel()
+                && empty($item['paid_at_label'])
+            )));
     }
 
     public function test_completed_routes_move_to_the_completed_panel(): void

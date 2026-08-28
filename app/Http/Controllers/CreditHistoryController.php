@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Loan;
 use App\Models\Payment;
+use App\Support\OperationalMesa;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -45,8 +46,28 @@ class CreditHistoryController extends Controller
                 'can_originate_new_credit' => (int) $client->open_loans_count === 0,
             ]);
 
+        $open = Client::query()->whereHas('loans', fn ($query) => $query->whereIn('status', Loan::COLLECTIBLE_STATUSES))->count();
+        $unlocked = Client::query()->whereDoesntHave('loans', fn ($query) => $query->whereIn('status', Loan::COLLECTIBLE_STATUSES))->count();
+        $withHistory = Client::query()->has('loans')->count();
+        $situation = $withHistory === 0
+            ? 'Todavía no hay historial crediticio para mostrar.'
+            : "{$withHistory} cliente".($withHistory === 1 ? '' : 's')." con créditos · {$open} con crédito vigente · {$unlocked} desbloqueado".($unlocked === 1 ? '' : 's')." para un nuevo crédito";
+
         return Inertia::render('CreditHistory/Index', [
             'clients' => $clients,
+            'board' => [
+                'briefing' => [
+                    'title' => 'Historial crediticio',
+                    'date_label' => OperationalMesa::dateLabel(),
+                    'situation' => $situation,
+                ],
+                'stats' => ['total' => $open + $unlocked],
+                'mix' => [
+                    ['key' => 'open', 'tone' => 'info', 'label' => 'Crédito vigente', 'value' => $open],
+                    ['key' => 'unlocked', 'tone' => 'ok', 'label' => 'Nuevo crédito', 'value' => $unlocked],
+                ],
+                'growth' => OperationalMesa::monthlyGrowth(Loan::query()->whereNotNull('disbursed_at'), 'disbursed_at'),
+            ],
             'filters' => $request->only('search', 'status'),
             'endpoints' => ['index' => route('credit-history.index')],
         ]);
@@ -67,6 +88,7 @@ class CreditHistoryController extends Controller
                 'currency' => $loan->currency,
                 'principal' => $loan->principal,
                 'outstanding' => $loan->outstanding_balance,
+                'mora' => (string) $loan->delinquency_balance,
                 'disbursed_at' => $loan->disbursed_at?->format('Y-m-d'),
                 'product' => $loan->application?->product?->name,
                 'seller' => $loan->seller?->user?->name,

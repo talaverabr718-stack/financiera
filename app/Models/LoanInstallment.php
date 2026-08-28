@@ -61,6 +61,13 @@ class LoanInstallment extends Model
         return bccomp($outstanding, '0.00', 2) > 0 ? $outstanding : '0.00';
     }
 
+    public function moraOutstanding(): string
+    {
+        $outstanding = bcsub((string) $this->delinquency_due, (string) $this->delinquency_paid, 2);
+
+        return bccomp($outstanding, '0.00', 2) === 1 ? $outstanding : '0.00';
+    }
+
     public function isExcludedFromCollection(): bool
     {
         return in_array($this->status, self::EXCLUDED_STATUSES, true);
