@@ -7,6 +7,7 @@ use App\Models\SellerProfile;
 use App\Models\User;
 use App\Models\Zone;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class CollaboratorModuleTest extends TestCase
@@ -35,7 +36,8 @@ class CollaboratorModuleTest extends TestCase
         $this->assertSame('María de Campo', $collaborator->user->name);
         $this->assertTrue($collaborator->hasCapability('collections'));
         $this->assertFalse($collaborator->hasCapability('credit_origination'));
-        $this->get(route('collaborators.show', $collaborator))->assertOk()->assertSee('María de Campo');
+        $this->get(route('collaborators.show', $collaborator))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Collaborators/Show')->where('collaborator.user.name', 'María de Campo'));
     }
 
     public function test_zone_must_belong_to_selected_branch(): void

@@ -73,7 +73,7 @@ const submit = () => form.put(props.endpoints.update, { preserveScroll: true });
 </template>
 
 <style scoped>
-.permission-pill { min-height: 1.75rem; border: 1px solid #e2e8f0; border-radius: .55rem; background: #fff; padding: .25rem .55rem; color: #94a3b8; font-size: .58rem; font-weight: 800; transition: all .15s ease; }
-.permission-view-active { border-color: #c7d2fe; background: #eef2ff; color: #4f46e5; box-shadow: inset 0 0 0 1px rgba(99,102,241,.05); }
-.permission-manage-active { border-color: #a7f3d0; background: #ecfdf5; color: #059669; box-shadow: inset 0 0 0 1px rgba(16,185,129,.05); }
+.permission-pill { min-height: 1.75rem; border: 1px solid rgba(255,255,255,.1); border-radius: .55rem; background: rgba(255,255,255,.04); padding: .25rem .55rem; color: #8b93a7; font-size: .58rem; font-weight: 800; transition: all .15s ease; }
+.permission-view-active { border-color: rgba(91,140,255,.4); background: rgba(91,140,255,.16); color: #9eb6ff; }
+.permission-manage-active { border-color: rgba(52,211,153,.4); background: rgba(52,211,153,.14); color: #6ee7b7; }
 </style>

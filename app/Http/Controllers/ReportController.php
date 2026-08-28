@@ -9,6 +9,7 @@ use App\Services\FinancialReportService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Inertia\Inertia;
 
 class ReportController extends Controller
 {
@@ -26,7 +27,7 @@ class ReportController extends Controller
         $clients = Client::orderBy('full_name')->get(['id', 'full_name']);
         $sellers = SellerProfile::with('user')->where('status', 'active')->get();
 
-        return view('reports.index', compact('type', 'from', 'to', 'summary', 'data', 'clients', 'sellers'));
+        return Inertia::render('Reports/Index', compact('type','from','to','summary','data','clients','sellers') + ['types'=>FinancialReportService::TYPES,'exportUrl'=>route('reports.export')]);
     }
 
     public function export(Request $request): StreamedResponse

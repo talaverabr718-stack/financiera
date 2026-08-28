@@ -9,6 +9,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class SettingsModuleTest extends TestCase
@@ -41,7 +42,31 @@ class SettingsModuleTest extends TestCase
     public function test_appearance_is_persisted_and_applied_to_global_layout(): void
     {
         $this->put(route('settings.appearance.update'), ['primary_color' => '#0f766e', 'sidebar_color' => '#172554', 'accent_color' => '#2dd4bf', 'background_color' => '#f0fdfa', 'palette' => 'custom', 'font_family' => 'merriweather', 'density' => 'compact', 'border_radius' => 'rounded'])->assertRedirect();
-        $this->get(route('settings.index'))->assertOk()->assertSee('--app-primary:#0f766e', false)->assertSee('density-compact', false);
+        $this->get(route('settings.index'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('appearance.primary_color', '#0f766e')
+            ->where('appearance.density', 'compact')
+            ->where('appearance.theme', 'night'));
+    }
+
+    public function test_appearance_can_switch_to_the_light_office_theme(): void
+    {
+        $this->put(route('settings.appearance.update'), [
+            'theme' => 'day',
+            'primary_color' => '#1d4ed8',
+            'sidebar_color' => '#ffffff',
+            'accent_color' => '#0f766e',
+            'background_color' => '#f3f5f8',
+            'font_family' => 'inter',
+            'density' => 'comfortable',
+            'border_radius' => 'soft',
+        ])->assertRedirect();
+
+        $this->get(route('settings.index'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('appearance.theme', 'day')
+            ->where('appearance.background_color', '#f3f5f8')
+            ->where('appearance.primary_color', '#1d4ed8'));
+        $this->get(route('settings.appearance'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('settings.theme', 'day'));
     }
 
     public function test_a_disabled_module_is_hidden_and_blocked_by_url(): void
@@ -68,7 +93,10 @@ class SettingsModuleTest extends TestCase
         $this->put(route('settings.brand.update'), ['system_name' => 'Financiera Segovia', 'system_tagline' => 'Crédito responsable', 'logo' => $logo])->assertRedirect();
         $path = DB::table('system_settings')->where('key', 'logo_path')->value('value');
         Storage::disk('local')->assertExists($path);
-        $this->get(route('settings.index'))->assertOk()->assertSee('Financiera Segovia')->assertSee(route('settings.logo'), false)->assertSee('print-brand', false);
+        $this->get(route('settings.index'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('brand.system_name', 'Financiera Segovia')
+            ->where('brand.system_tagline', 'Crédito responsable')
+            ->where('brand.logo_url', route('settings.logo')));
         $logoResponse = $this->get(route('settings.logo'))->assertOk();
         $this->assertStringContainsString('no-store', $logoResponse->headers->get('Cache-Control'));
         $replacement = UploadedFile::fake()->image('nuevo-logo.png', 300, 300);
@@ -82,7 +110,8 @@ class SettingsModuleTest extends TestCase
     public function test_topbar_has_a_secure_logout_action(): void
     {
         $user = User::factory()->create();
-        $this->actingAs($user)->get(route('settings.index'))->assertOk()->assertSee('Salir')->assertSee(route('logout'), false);
+        $this->actingAs($user)->get(route('settings.index'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('routes.logout', route('logout')));
         $this->actingAs($user)->post(route('logout'))->assertRedirect('/');
         $this->assertGuest();
     }

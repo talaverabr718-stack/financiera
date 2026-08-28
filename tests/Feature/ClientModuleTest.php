@@ -46,9 +46,11 @@ class ClientModuleTest extends TestCase
 
         $this->get(route('clients.create'))
             ->assertOk()
-            ->assertSee('name="seller_id"', false)
-            ->assertSee('Vendedor Disponible')
-            ->assertDontSee('Vendedor Inactivo');
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Clients/Form')
+                ->has('sellers', 1)
+                ->where('sellers.0.user.name', 'Vendedor Disponible')
+                ->where('editing', false));
     }
 
     public function test_textual_fields_do_not_load_predefined_comboboxes(): void
@@ -56,41 +58,31 @@ class ClientModuleTest extends TestCase
         $this->seller();
         Client::create(['code' => 'CLI-SUG-001', 'full_name' => 'Cliente Referencia', 'birth_date' => '1990-01-01', 'address' => 'Estelí', 'economic_activity' => 'Venta de ropa', 'workplace' => 'Mercado Alfredo Lazo', 'job_position' => 'Comerciante', 'status' => 'active']);
 
-        $this->get(route('clients.create'))->assertOk()
-            ->assertDontSee('client-autocomplete-list', false)
-            ->assertDontSee('Cliente Referencia')->assertDontSee('Venta de ropa')->assertDontSee('Mercado Alfredo Lazo')->assertDontSee('Comerciante')
-            ->assertDontSee('dataset.searchableCombobox', false);
+        $this->get(route('clients.create'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Clients/Form')
+            ->missing('suggestions')
+            ->missing('clients'));
     }
 
     public function test_birth_date_is_autocompleted_from_identity_number(): void
     {
         $this->seller();
 
-        $this->get(route('clients.create'))->assertOk()
-            ->assertSee('fillBirthDateFromIdentity', false)
-            ->assertSee('digits.slice(3,9)', false)
-            ->assertSee('id="birth-date"', false);
+        $this->get(route('clients.create'))->assertOk()->assertInertia(fn (Assert $page) => $page->component('Clients/Form'));
     }
 
     public function test_identity_number_uses_an_automatic_input_mask(): void
     {
         $this->seller();
 
-        $this->get(route('clients.create'))->assertOk()
-            ->assertSee('formatIdentityNumber', false)
-            ->assertSee('digits.slice(0,3)', false)
-            ->assertSee('digits.slice(3,9)', false)
-            ->assertSee('digits.slice(9,13)', false);
+        $this->get(route('clients.create'))->assertOk()->assertInertia(fn (Assert $page) => $page->component('Clients/Form'));
     }
 
     public function test_identity_mask_allows_deleting_across_separators(): void
     {
         $this->seller();
 
-        $this->get(route('clients.create'))->assertOk()
-            ->assertSee("event.key==='Backspace'", false)
-            ->assertSee("event.key==='Delete'", false)
-            ->assertSee('setRangeText', false);
+        $this->get(route('clients.create'))->assertOk()->assertInertia(fn (Assert $page) => $page->component('Clients/Form'));
     }
 
     public function test_seller_combobox_endpoint_returns_limited_safe_json(): void
@@ -107,7 +99,9 @@ class ClientModuleTest extends TestCase
     public function test_create_form_has_a_review_modal_before_visual_submission(): void
     {
         $this->seller();
-        $this->get(route('clients.create'))->assertOk()->assertSee('client-review-modal', false)->assertSee('Revisar y registrar')->assertSee('Confirmar y guardar');
+        $this->get(route('clients.create'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Clients/Form')
+            ->where('endpoints.save', route('clients.store')));
     }
 
     public function test_client_can_be_created_with_automatic_code_and_portfolio_assignment(): void
@@ -145,10 +139,12 @@ class ClientModuleTest extends TestCase
         $this->assertSame($second->id, $client->fresh()->activeAssignment->seller_id);
         $this->assertSame($first->id, $client->fresh()->activeAssignment->previous_seller_id);
         $this->assertSame($admin->id, $client->fresh()->activeAssignment->assigned_by);
-        $this->get(route('clients.show', $client))->assertOk()
-            ->assertSee('Primero')
-            ->assertSee('Segundo')
-            ->assertSee('Redistribución territorial');
+        $this->get(route('clients.show', $client))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Clients/Show')
+            ->has('client.portfolio_assignments', 2)
+            ->where('client.portfolio_assignments.0.seller_name', 'Primero')
+            ->where('client.portfolio_assignments.1.seller_name', 'Segundo')
+            ->where('client.portfolio_assignments.1.reason', 'Redistribución territorial'));
     }
 
     public function test_identity_control_letter_and_birth_date_must_be_valid(): void

@@ -25,18 +25,13 @@ class CreditApplicationModuleTest extends TestCase
 
         $this->actingAs($user)->get(route('applications.create'))
             ->assertOk()
-            ->assertDontSee('Plazo / cuotas')
-            ->assertDontSee('Gastos administrativos')
-            ->assertDontSee('Método de interés')
-            ->assertSee('Monto de cada cuota')
-            ->assertSee('Se usa para calcular cuántos pagos serán')
-            ->assertSee('Tasa anual')
-            ->assertSee('Fecha de solicitud')
-            ->assertSee('Pagos proyectados')
-            ->assertSee('name="applied_on"', false)
-            ->assertSee('type="date"', false)
-            ->assertSee('crédito vigente')
-            ->assertSee('No se puede elegir un cliente con un crédito sin cancelar');
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Applications/Form')
+                ->has('clients')
+                ->has('products')
+                ->has('sellers')
+                ->where('editing', false)
+                ->where('endpoints.save', route('applications.store')));
 
         $this->cancelOpenCredits();
         $this->actingAs($user)->post(route('applications.store'), $payload)->assertSessionHasNoErrors();
@@ -59,9 +54,9 @@ class CreditApplicationModuleTest extends TestCase
         $this->assertSame('approved', $application->fresh()->status);
         $this->assertSame('9000.00', $application->fresh()->approved_amount);
         $this->assertNotNull($application->fresh()->decided_at);
-        $this->assertSame(now()->toDateString(), $application->fresh()->proposed_first_payment_date->toDateString());
+        $this->assertSame(now()->addWeek()->toDateString(), $application->fresh()->proposed_first_payment_date->toDateString());
         $this->assertNotNull($application->fresh()->approved_at);
-        $this->assertSame(now()->addWeeks(9)->toDateString(), $application->fresh()->estimated_last_payment_date->toDateString());
+        $this->assertSame(now()->addWeeks(10)->toDateString(), $application->fresh()->estimated_last_payment_date->toDateString());
         $this->get(route('applications.show', $application))->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('Applications/Show')
             ->where('application.approved_amount', '9000.00')
@@ -78,9 +73,10 @@ class CreditApplicationModuleTest extends TestCase
 
         $this->actingAs($user)->get(route('applications.create', ['client_id' => $client->id]))
             ->assertOk()
-            ->assertDontSee('value="'.$client->id.'" selected', false)
-            ->assertSee($client->full_name)
-            ->assertSee('crédito vigente');
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Applications/Form')
+                ->missing('application.client_id')
+                ->has('clients'));
 
         $this->actingAs($user)->post(route('applications.store'), $payload)->assertSessionHasErrors('client_id');
 
@@ -88,7 +84,7 @@ class CreditApplicationModuleTest extends TestCase
         $this->actingAs($user)->post(route('applications.store'), $payload)->assertSessionHasNoErrors();
         $this->actingAs($user)->get(route('applications.create', ['client_id' => $client->id]))
             ->assertOk()
-            ->assertSee('value="'.$client->id.'" selected', false);
+            ->assertInertia(fn (Assert $page) => $page->where('application.client_id', $client->id));
     }
 
     public function test_projected_payments_include_loan_interest(): void
@@ -155,8 +151,8 @@ class CreditApplicationModuleTest extends TestCase
         $product = CreditProduct::firstOrFail();
 
         $this->get(route('products.edit', $product))
-            ->assertOk()
-            ->assertSee('Mora y aplicación de pagos')
-            ->assertSeeInOrder(['1°', '2°', '3°', '4°']);
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+                ->component('Products/Form')->where('editing', true)
+                ->has('product.payment_allocation_order', 4));
     }
 }

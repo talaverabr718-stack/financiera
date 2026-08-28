@@ -1,9 +1,8 @@
 <script setup>
 import { computed, ref } from 'vue';
 
-const props = defineProps({ initialLatitude: [String, Number], initialLongitude: [String, Number] });
-const latitude = ref(props.initialLatitude ?? '');
-const longitude = ref(props.initialLongitude ?? '');
+const latitude = defineModel('latitude', { type: [String, Number], default: '' });
+const longitude = defineModel('longitude', { type: [String, Number], default: '' });
 const locating = ref(false);
 const message = ref('');
 const error = ref(false);
@@ -32,8 +31,8 @@ const clear = () => { latitude.value = ''; longitude.value = ''; message.value =
     <div class="relative z-0 mt-6 block w-full clear-both rounded-xl border border-indigo-100 bg-indigo-50/35 p-4">
         <div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[10px] font-bold uppercase tracking-wide text-indigo-600">Ubicación exacta</p><p class="mt-1 text-[10px] text-slate-500">Permite colocar al cliente correctamente en las rutas de cobranza.</p></div><span class="rounded-full px-2.5 py-1 text-[9px] font-bold" :class="complete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'">{{ complete ? 'En mapa' : 'Sin coordenadas' }}</span></div>
         <div class="mt-4 grid min-w-0 items-end gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-            <label>Latitud<input v-model="latitude" name="latitude" type="number" min="-90" max="90" step="0.0000001" placeholder="13.0918000"></label>
-            <label>Longitud<input v-model="longitude" name="longitude" type="number" min="-180" max="180" step="0.0000001" placeholder="-86.3538000"></label>
+            <label>Latitud<input v-model="latitude" type="number" min="-90" max="90" step="0.0000001" placeholder="13.0918000"></label>
+            <label>Longitud<input v-model="longitude" type="number" min="-180" max="180" step="0.0000001" placeholder="-86.3538000"></label>
             <button type="button" class="btn-primary h-9 whitespace-nowrap" :disabled="locating" @click="locate">{{ locating ? 'Ubicando…' : 'Usar mi ubicación' }}</button>
         </div>
         <div class="mt-3 flex flex-wrap items-center gap-3"><p v-if="message" class="text-[10px]" :class="error ? 'text-rose-600' : 'text-emerald-700'">{{ message }}</p><a v-if="complete" :href="mapsUrl" target="_blank" rel="noopener" class="text-[10px] font-bold text-indigo-600">Ver punto en el mapa ↗</a><button v-if="complete" type="button" class="text-[10px] font-bold text-rose-500" @click="clear">Quitar coordenadas</button></div>

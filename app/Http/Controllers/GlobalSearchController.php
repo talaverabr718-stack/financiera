@@ -7,6 +7,7 @@ use App\Models\CreditApplication;
 use App\Models\Loan;
 use App\Models\SellerProfile;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class GlobalSearchController extends Controller
 {
@@ -22,6 +23,6 @@ class GlobalSearchController extends Controller
                 ->concat(SellerProfile::with('user')->whereHas('user', fn ($q) => $q->where('name', 'like', "%{$term}%"))->take(8)->get()->map(fn ($item) => ['type' => 'Colaborador', 'title' => $item->user->name, 'meta' => $item->code, 'url' => route('collaborators.show', $item)]));
         }
 
-        return view('search.index', compact('term', 'results'));
+        return Inertia::render('Search/Index', compact('term', 'results'));
     }
 }

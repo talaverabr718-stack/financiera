@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import BaseModal from '../ui/BaseModal.vue';
 
 const props = defineProps({ endpoint: String, csrf: String, selectId: { type: String, default: 'product' } });
+const emit = defineEmits(['created']);
 const open = ref(false);
 const saving = ref(false);
 const errors = ref([]);
@@ -39,6 +40,7 @@ const save = async () => {
         option.dataset.method = data.product.default_interest_method || '';
         option.dataset.fee = data.product.default_administrative_fee || '0';
         select?.add(option); select?.dispatchEvent(new Event('change'));
+        emit('created', data.product);
         reset(); saved.value = true; clearTimeout(toastTimer); toastTimer = setTimeout(() => saved.value = false, 2800);
     } catch (error) {
         errors.value = Object.values(error.errors ?? { error: [error.message ?? 'No fue posible guardar el producto.'] }).flat();
@@ -52,7 +54,7 @@ onBeforeUnmount(() => { clearTimeout(toastTimer); document.body.style.overflow =
 <template>
     <button type="button" class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-600 text-lg font-bold text-white shadow-md shadow-indigo-200 transition hover:-translate-y-0.5 hover:bg-indigo-700" title="Agregar producto" aria-label="Agregar producto" @click="show">+</button>
     <BaseModal :open="open" title="Nuevo producto" description="El código se asigna al guardar." size="max-w-md" @close="close">
-        <div v-if="errors.length" class="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><strong>Revisa los datos:</strong><ul class="mt-1 list-disc pl-5"><li v-for="error in errors" :key="error">{{ error }}</li></ul></div>
+        <div v-if="errors.length" class="mb-3 rounded-xl border border-rose-400/20 bg-rose-500/10 p-3 text-xs text-rose-300"><strong>Revisa los datos:</strong><ul class="mt-1 list-disc pl-5"><li v-for="error in errors" :key="error">{{ error }}</li></ul></div>
         <div class="grid gap-4">
             <label class="field">Código<input value="Se genera automáticamente" disabled></label>
             <label class="field">Nombre *<input v-model.trim="product.name" maxlength="150" required></label>
@@ -66,13 +68,13 @@ onBeforeUnmount(() => { clearTimeout(toastTimer); document.body.style.overflow =
             </div>
         </template>
     </BaseModal>
-    <Teleport to="body"><Transition name="toast"><div v-if="saved" class="fixed bottom-5 right-5 z-[120] flex items-center gap-3 rounded-xl border border-emerald-200 bg-white px-4 py-3 text-xs font-semibold text-emerald-700 shadow-xl"><span class="grid h-6 w-6 place-items-center rounded-full bg-emerald-100">✓</span>Producto creado y seleccionado.</div></Transition></Teleport>
+    <Teleport to="body"><Transition name="toast"><div v-if="saved" class="fixed bottom-5 right-5 z-[120] flex items-center gap-3 rounded-xl border border-emerald-400/20 bg-[#101522] px-4 py-3 text-xs font-semibold text-emerald-300 shadow-xl"><span class="grid h-6 w-6 place-items-center rounded-full bg-emerald-400/15">✓</span>Producto creado y seleccionado.</div></Transition></Teleport>
 </template>
 
 <style scoped>
-.field{display:flex;flex-direction:column;color:#64748b;font-size:.7rem;font-weight:700}
-.field input,.field select{margin-top:.35rem;min-height:2.4rem;border:1px solid #e2e8f0;border-radius:.75rem;background:#fff;padding:.55rem .75rem;color:#172033;font-size:.8rem;font-weight:500;outline:none}
-.field input:focus,.field select:focus{border-color:#6366f1;box-shadow:0 0 0 4px rgba(99,102,241,.12)}
-.field input:disabled{background:#f8fafc;color:#94a3b8}
+.field{display:flex;flex-direction:column;color:#9aa8c7;font-size:.7rem;font-weight:700}
+.field input,.field select{margin-top:.35rem;min-height:2.4rem;border:1px solid rgba(255,255,255,.1);border-radius:.75rem;background:rgba(255,255,255,.05);padding:.55rem .75rem;color:#f4f7ff;font-size:.8rem;font-weight:500;outline:none}
+.field input:focus,.field select:focus{border-color:#5b8cff;box-shadow:0 0 0 4px rgba(91,140,255,.16)}
+.field input:disabled{background:rgba(255,255,255,.03);color:#6b7388}
 .toast-enter-active,.toast-leave-active{transition:.2s}.toast-enter-from,.toast-leave-to{opacity:0;transform:translateY(8px)}
 </style>

@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class AccountingReportController extends Controller
 {
@@ -15,7 +16,7 @@ class AccountingReportController extends Controller
         $to = $request->date_to ?: today()->format('Y-m-d');
         $entries = JournalEntry::posted()->with(['lines.account', 'user'])->whereBetween('date', [$from, $to])->orderBy('date')->paginate(20)->withQueryString();
 
-        return view('accounting.reports.journal', compact('entries', 'from', 'to'));
+        return Inertia::render('Accounting/Reports/Index', compact('entries','from','to') + ['report'=>'journal']);
     }
 
     public function ledger(Request $request)
@@ -31,7 +32,7 @@ class AccountingReportController extends Controller
             $lines = JournalEntryLine::with('journalEntry')->where('account_id', $account->id)->whereHas('journalEntry', fn ($q) => $q->posted()->whereBetween('date', [$from, $to]))->get()->sortBy('journalEntry.date');
         }
 
-return view('accounting.reports.ledger', compact('accounts', 'account', 'lines', 'opening', 'from', 'to'));
+        return Inertia::render('Accounting/Reports/Index', compact('accounts','account','lines','opening','from','to') + ['report'=>'ledger']);
     }
 
     public function trial(Request $request)
@@ -40,7 +41,7 @@ return view('accounting.reports.ledger', compact('accounts', 'account', 'lines',
         $to = $request->date_to ?: today()->format('Y-m-d');
         $accounts = Account::withSum(['lines as debit' => fn ($q) => $q->whereHas('journalEntry', fn ($q) => $q->posted()->whereBetween('date', [$from, $to]))], 'debit')->withSum(['lines as credit' => fn ($q) => $q->whereHas('journalEntry', fn ($q) => $q->posted()->whereBetween('date', [$from, $to]))], 'credit')->orderBy('code')->get();
 
-        return view('accounting.reports.trial', compact('accounts', 'from', 'to'));
+        return Inertia::render('Accounting/Reports/Index', compact('accounts','from','to') + ['report'=>'trial']);
     }
 
     private function balance(Account $account, $query): string

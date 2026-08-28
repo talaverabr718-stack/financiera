@@ -73,7 +73,7 @@ class CreditHistoryModuleTest extends TestCase
                 ->where('client.paid_credits_count', 1));
 
         $this->get(route('applications.create', ['client_id' => $client->id]))
-            ->assertOk()
-            ->assertSee('value="'.$client->id.'" selected', false);
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+                ->component('Applications/Form')->where('application.client_id', $client->id));
     }
 }

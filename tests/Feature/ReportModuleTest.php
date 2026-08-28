@@ -7,6 +7,7 @@ use App\Models\SystemSetting;
 use App\Services\FinancialReportService;
 use Database\Seeders\ClientModuleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class ReportModuleTest extends TestCase
@@ -29,7 +30,9 @@ class ReportModuleTest extends TestCase
         $other = Client::whereKeyNot($client->id)->firstOrFail();
         $otherLoan = $other->loans()->firstOrFail();
         $this->get(route('reports.index', ['report_type' => 'portfolio', 'start_date' => today()->subYear()->format('Y-m-d'), 'end_date' => today()->format('Y-m-d'), 'client' => $client->id]))
-            ->assertOk()->assertSee($client->full_name)->assertDontSee($otherLoan->number);
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+                ->component('Reports/Index')->where('type', 'portfolio')
+                ->where('data.data.0.client_id', $client->id));
     }
 
     public function test_report_can_be_exported_as_utf8_csv(): void

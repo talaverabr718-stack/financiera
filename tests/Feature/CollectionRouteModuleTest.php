@@ -11,6 +11,7 @@ use App\Models\Zone;
 use Database\Seeders\ClientModuleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class CollectionRouteModuleTest extends TestCase
@@ -135,19 +136,14 @@ class CollectionRouteModuleTest extends TestCase
 
         $this->get(route('routes.index', [
             'date' => $completed->scheduled_date->format('Y-m-d'),
-        ]))->assertOk()
-            ->assertSee('Ruta aún pendiente del día')
-            ->assertSee('Rutas completadas')
-            ->assertSee($completed->name)
-            ->assertViewHas('openRoutes', fn ($routes) => $routes->pluck('id')->all() === [$open->id])
-            ->assertViewHas('completedRoutes', fn ($routes) => $routes->pluck('id')->all() === [$completed->id])
-            ->assertViewHas('selectedRoute', fn ($route) => $route->id === $open->id);
+        ]))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Routes/Index')->where('openRoutes.0.id', $open->id)
+            ->where('completedRoutes.0.id', $completed->id)->where('selectedRoute.id', $open->id));
 
         $this->get(route('routes.index', [
             'date' => $completed->scheduled_date->format('Y-m-d'),
             'route' => $completed->id,
-        ]))->assertOk()
-            ->assertViewHas('selectedRoute', fn ($route) => $route->id === $completed->id);
+        ]))->assertOk()->assertInertia(fn (Assert $page) => $page->where('selectedRoute.id', $completed->id));
     }
 
     public function test_selected_route_only_lists_its_assigned_clients(): void
@@ -173,11 +169,10 @@ class CollectionRouteModuleTest extends TestCase
             'route' => $selectedRoute->id,
         ]));
 
-        $response->assertOk()
-            ->assertSee($selectedRoute->stops->first()->client->full_name)
-            ->assertDontSee($otherClient->full_name)
-            ->assertSee('route-operations-data', false)
-            ->assertSee('endpointTemplate', false);
+        $response->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('selectedRoute.id', $selectedRoute->id)
+            ->where('selectedRoute.stops.0.client.full_name', $selectedRoute->stops->first()->client->full_name)
+            ->where('endpoints.visitTemplate', route('routes.stops.visit', ['stop' => '__STOP__'])));
     }
 
     public function test_google_maps_routes_library_maps_the_ordered_stops(): void
@@ -193,12 +188,8 @@ class CollectionRouteModuleTest extends TestCase
         $this->get(route('routes.index', [
             'date' => $selectedRoute->scheduled_date->format('Y-m-d'),
             'route' => $selectedRoute->id,
-        ]))->assertOk()
-            ->assertSee("google.maps.importLibrary('routes')", false)
-            ->assertSee('Route.computeRoutes', false)
-            ->assertSee("travelMode:'DRIVING'", false)
-            ->assertSee('route-distance', false)
-            ->assertDontSee('unpkg.com/leaflet', false);
+        ]))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('googleMapsKey', 'test-browser-key')->where('selectedRoute.id', $selectedRoute->id));
     }
 
     public function test_route_can_be_edited_and_unmanaged_clients_can_be_removed(): void
@@ -207,10 +198,8 @@ class CollectionRouteModuleTest extends TestCase
         $route = CollectionRoute::with('stops')->firstOrFail();
         $keptClientId = $route->stops->last()->client_id;
 
-        $this->get(route('routes.edit', $route))
-            ->assertOk()
-            ->assertSee('Editar ruta de cobranza')
-            ->assertSee('Guardar cambios');
+        $this->get(route('routes.edit', $route))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Routes/Form')->where('editing', true)->where('route.id', $route->id));
 
         $this->put(route('routes.update', $route), [
             'name' => 'Ruta actualizada',

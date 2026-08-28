@@ -16,7 +16,9 @@
     },
     "dependencies": {
         "@fontsource/inter": "^5.3.0",
+        "@fontsource/manrope": "^5.3.0",
         "@inertiajs/vue3": "^3.7.0",
+        "leaflet": "^1.9.4",
         "lucide": "^1.32.0",
         "vue": "^3.5.0"
     }

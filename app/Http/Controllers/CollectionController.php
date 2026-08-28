@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 
 class CollectionController extends Controller
 {
@@ -58,7 +59,7 @@ class CollectionController extends Controller
         $lateCollections = $lateInstallments->count();
         $selectedRoute = $routes->firstWhere('id', $request->integer('agenda_route')) ?? $routes->first();
 
-        return view('collections.index', compact('date', 'routes', 'collectedToday', 'paymentHistory', 'upcomingVisits', 'upcomingStops', 'pendingStops', 'lateCollections', 'lateInstallments', 'selectedRoute'));
+        return Inertia::render('Collections/Index', compact('date', 'routes', 'collectedToday', 'paymentHistory', 'upcomingVisits', 'upcomingStops', 'pendingStops', 'lateCollections', 'lateInstallments', 'selectedRoute') + ['storeTemplate' => route('collections.store',['stop'=>'__STOP__'])]);
     }
 
     public function store(Request $request, CollectionRouteStop $stop, PaymentApplicationService $payments)

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Account;
 use App\Models\JournalEntry;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class AccountingDashboardController extends Controller
 {
@@ -17,6 +18,6 @@ class AccountingDashboardController extends Controller
         $summary = ['debit' => (clone $posted)->sum('total_debit'), 'credit' => (clone $posted)->sum('total_credit'), 'posted' => (clone $posted)->count(), 'draft' => JournalEntry::where('status', 'draft')->count(), 'accounts' => Account::active()->count(), 'reversed' => JournalEntry::where('status', 'reversed')->whereBetween('date', [$from, $to])->count()];
         $recent = JournalEntry::with('user')->latest('date')->latest('id')->take(8)->get();
 
-        return view('accounting.dashboard', compact('month', 'summary', 'recent'));
+        return Inertia::render('Accounting/Dashboard', compact('month', 'summary', 'recent') + ['links' => ['accounts'=>route('accounting.accounts.index'),'entries'=>route('accounting.entries.index'),'createEntry'=>route('accounting.entries.create'),'journal'=>route('accounting.journal'),'ledger'=>route('accounting.ledger'),'trial'=>route('accounting.trial')]]);
     }
 }

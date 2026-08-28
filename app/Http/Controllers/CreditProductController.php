@@ -5,22 +5,23 @@ namespace App\Http\Controllers;
 use App\Http\Requests\CreditProductRequest;
 use App\Models\CreditProduct;
 use App\Services\DocumentSequenceService;
+use Inertia\Inertia;
 
 class CreditProductController extends Controller
 {
     public function index()
     {
-        return view('products.index', ['products' => CreditProduct::orderBy('name')->get()]);
+        return Inertia::render('Products/Index', ['products' => CreditProduct::orderBy('name')->get(), 'endpoints' => ['create' => route('products.create')]]);
     }
 
     public function create()
     {
-        return view('products.form', ['product' => new CreditProduct]);
+        return $this->formPage(new CreditProduct);
     }
 
     public function edit(CreditProduct $product)
     {
-        return view('products.form', compact('product'));
+        return $this->formPage($product);
     }
 
     public function store(CreditProductRequest $request, DocumentSequenceService $sequences)
@@ -61,5 +62,10 @@ class CreditProductController extends Controller
         }
 
         return $data;
+    }
+
+    private function formPage(CreditProduct $product)
+    {
+        return Inertia::render('Products/Form', ['product' => $product, 'editing' => $product->exists, 'endpoints' => ['index' => route('products.index'), 'save' => $product->exists ? route('products.update', $product) : route('products.store')]]);
     }
 }

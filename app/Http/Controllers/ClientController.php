@@ -40,7 +40,7 @@ class ClientController extends Controller
 
     public function create()
     {
-        return view('clients.form', ['client' => new Client, 'sellers' => $this->sellers()]);
+        return $this->formPage(new Client);
     }
 
     public function sellerOptions(Request $request)
@@ -83,14 +83,48 @@ class ClientController extends Controller
             ->sortByDesc('date')->values();
         $delinquency = app(DelinquencyTrackingService::class)->summarizeClient($client);
 
-        return view('clients.show', compact('client', 'timeline', 'delinquency'));
+        $clientData = array_merge($client->toArray(), [
+            'seller_name' => $client->activeAssignment?->seller?->user?->name,
+            'seller_code' => $client->activeAssignment?->seller?->code,
+            'total_income' => (float) $client->estimated_income + (float) $client->other_income,
+            'available' => max(0, (float) $client->estimated_income + (float) $client->other_income - (float) $client->estimated_expenses),
+            'portfolio_assignments' => $client->portfolioAssignments->sortByDesc('assigned_at')->values()->map(fn ($assignment) => [
+                'id' => $assignment->id,
+                'seller_name' => $assignment->seller->user->name,
+                'reason' => $assignment->reason,
+                'assigned_at' => $assignment->assigned_at,
+                'ended_at' => $assignment->ended_at,
+            ]),
+            'applications' => $client->creditApplications->sortByDesc('created_at')->values()->map(fn ($application) => [
+                'id' => $application->id,
+                'number' => $application->number,
+                'product' => $application->product->name,
+                'requested_amount' => $application->requested_amount,
+                'currency' => $application->currency,
+                'status' => $application->status,
+                'url' => route('applications.show', $application),
+            ]),
+        ]);
+
+        return Inertia::render('Clients/Show', [
+            'client' => $clientData,
+            'timeline' => $timeline,
+            'delinquency' => $delinquency,
+            'sellers' => $this->sellers(),
+            'endpoints' => [
+                'edit' => route('clients.edit', $client),
+                'destroy' => route('clients.destroy', $client),
+                'transfer' => route('clients.transfer', $client),
+                'create_application' => route('applications.create', ['client_id' => $client->id]),
+            ],
+        ]);
     }
 
     public function edit(Client $client)
     {
         $client->load(['assets']);
 
-        return view('clients.form', compact('client') + ['sellers' => $this->sellers()]);
+        return $this->formPage($client);
     }
 
     public function update(ClientRequest $request, Client $client)
@@ -118,5 +152,19 @@ class ClientController extends Controller
     private function sellers()
     {
         return SellerProfile::with('user')->where('status', 'active')->whereJsonContains('capabilities', 'prospecting')->get();
+    }
+
+    private function formPage(Client $client)
+    {
+        return Inertia::render('Clients/Form', [
+            'client' => $client,
+            'sellers' => $this->sellers(),
+            'locations' => config('nicaragua.locations'),
+            'editing' => $client->exists,
+            'endpoints' => [
+                'index' => route('clients.index'),
+                'save' => $client->exists ? route('clients.update', $client) : route('clients.store'),
+            ],
+        ]);
     }
 }

@@ -12,8 +12,24 @@ class UpdateAppearanceSettingsRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'theme' => $this->input('theme', 'night') ?: 'night',
+        ]);
+    }
+
     public function rules(): array
     {
-        return ['primary_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'], 'sidebar_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'], 'accent_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'], 'background_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'], 'font_family' => ['required', Rule::in(['instrument', 'inter', 'system', 'humanist', 'nunito', 'poppins', 'roboto', 'lato', 'serif', 'merriweather', 'georgia', 'mono'])], 'density' => ['required', Rule::in(['comfortable', 'compact'])], 'border_radius' => ['required', Rule::in(['soft', 'rounded', 'square'])]];
+        return [
+            'theme' => ['required', Rule::in(['night', 'day'])],
+            'primary_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'sidebar_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'accent_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'background_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'font_family' => ['required', Rule::in(['instrument', 'inter', 'system', 'humanist', 'nunito', 'poppins', 'roboto', 'lato', 'serif', 'merriweather', 'georgia', 'mono'])],
+            'density' => ['required', Rule::in(['comfortable', 'compact'])],
+            'border_radius' => ['required', Rule::in(['soft', 'rounded', 'square'])],
+        ];
     }
 }
