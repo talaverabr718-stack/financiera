@@ -50,9 +50,11 @@ class LoanPortfolioModuleTest extends TestCase
 
         $this->patch(route('loans.status', $loan), ['status' => 'delinquent'])->assertSessionHasNoErrors();
         $this->assertSame('delinquent', $loan->fresh()->status);
+        $this->assertSame('OPEN', $loan->fresh()->open_guard);
         $this->patch(route('loans.status', $loan), ['status' => 'paid'])->assertSessionHasErrors('status');
         $loan->update(['principal_balance' => 0, 'interest_balance' => 0, 'fee_balance' => 0]);
         $this->patch(route('loans.status', $loan), ['status' => 'paid'])->assertSessionHasNoErrors();
         $this->assertSame('paid', $loan->fresh()->status);
+        $this->assertNull($loan->fresh()->open_guard);
     }
 }

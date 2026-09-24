@@ -2,7 +2,9 @@
 import { computed, ref, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import AppLayout from '../../Layouts/AppLayout.vue';
+import { usePermissions } from '../../composables/usePermissions.js';
 
+const { canManage } = usePermissions();
 const props = defineProps({ client: Object, loans: Array, endpoints: Object });
 const selectedId = ref(props.loans[0]?.id ?? null);
 const selected = computed(() => props.loans.find(loan => loan.id === selectedId.value) ?? null);
@@ -19,8 +21,8 @@ watch(() => props.loans, loans => {
     <AppLayout :title="client.full_name" eyebrow="Historial crediticio" :description="`${client.code} · ${client.identity_number || 'Sin cédula'} · ${client.credits_count} crédito${client.credits_count === 1 ? '' : 's'}`">
         <template #header-actions>
             <div class="flex flex-col items-end gap-2">
-                <a v-if="client.can_originate_new_credit" :href="endpoints.new_credit" class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white">Nuevo crédito</a>
-                <button v-else type="button" disabled class="cursor-not-allowed rounded-xl bg-slate-200 px-4 py-2 text-xs font-bold text-slate-500">Nuevo crédito</button>
+                <a v-if="canManage('applications') && client.can_originate_new_credit" :href="endpoints.new_credit" class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white">Nuevo crédito</a>
+                <button v-else-if="canManage('applications')" type="button" disabled class="cursor-not-allowed rounded-xl bg-slate-200 px-4 py-2 text-xs font-bold text-slate-500">Nuevo crédito</button>
                 <p class="max-w-xs text-right text-[10px] text-slate-400">{{ client.can_originate_new_credit ? 'El crédito vigente ya fue cancelado. Puede originar uno nuevo.' : 'Cancela el crédito vigente para desbloquear uno nuevo.' }}</p>
             </div>
         </template>

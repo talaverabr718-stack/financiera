@@ -39,19 +39,35 @@ class LoanInstallment extends Model
 
     public function amountDue(): string
     {
-        $due = bcadd((string) $this->principal_due, (string) $this->interest_due, 2);
-        $due = bcadd($due, (string) $this->fees_due, 2);
+        return bcadd($this->scheduledAmountDue(), (string) $this->delinquency_due, 2);
+    }
 
-        return bcadd($due, (string) $this->delinquency_due, 2);
+    public function scheduledAmountDue(): string
+    {
+        $due = bcadd((string) $this->principal_due, (string) $this->interest_due, 2);
+
+        return bcadd($due, (string) $this->fees_due, 2);
     }
 
     public function amountPaid(): string
     {
-        $paid = bcadd((string) $this->principal_paid, (string) $this->interest_paid, 2);
-        $paid = bcadd($paid, (string) $this->fees_paid, 2);
-        $paid = bcadd($paid, (string) $this->delinquency_paid, 2);
+        $paid = bcadd($this->scheduledAmountPaid(), (string) $this->delinquency_paid, 2);
 
         return bccomp((string) $this->paid_amount, $paid, 2) > 0 ? (string) $this->paid_amount : $paid;
+    }
+
+    public function scheduledAmountPaid(): string
+    {
+        $paid = bcadd((string) $this->principal_paid, (string) $this->interest_paid, 2);
+
+        return bcadd($paid, (string) $this->fees_paid, 2);
+    }
+
+    public function scheduledOutstandingAmount(): string
+    {
+        $outstanding = bcsub($this->scheduledAmountDue(), $this->scheduledAmountPaid(), 2);
+
+        return bccomp($outstanding, '0.00', 2) > 0 ? $outstanding : '0.00';
     }
 
     public function outstandingAmount(): string

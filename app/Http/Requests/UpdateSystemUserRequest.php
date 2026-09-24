@@ -17,6 +17,7 @@ class UpdateSystemUserRequest extends FormRequest
         $user = $this->route('user');
 
         return [
+            'system_role_id' => ['nullable', Rule::exists('system_roles', 'id')->where('is_active', true)],
             'name' => ['required', 'string', 'max:180'],
             'email' => ['required', 'email', 'max:180', Rule::unique('users', 'email')->ignore($user)],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],

@@ -22,7 +22,8 @@ class SettingsUserModuleTest extends TestCase
         $this->get(route('settings.users'))->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('Settings/Users')
             ->where('collaborators.0.id', $collaborator->id)
-            ->where('tabs.3.label', 'Usuarios'));
+            ->where('tabs.3.label', 'Usuarios')
+            ->where('auth.permissions.settings.full', true));
     }
 
     public function test_user_can_be_created_and_linked_to_an_available_collaborator(): void

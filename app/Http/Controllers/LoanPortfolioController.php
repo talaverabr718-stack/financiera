@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Loan;
 use App\Models\SellerProfile;
 use App\Services\DelinquencyTrackingService;
+use App\Services\PortfolioAccessService;
 use App\Support\OperationalMesa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,9 +14,11 @@ use Inertia\Inertia;
 
 class LoanPortfolioController extends Controller
 {
+    public function __construct(private PortfolioAccessService $portfolioAccess) {}
+
     public function index(Request $request)
     {
-        $base = Loan::query();
+        $base = $this->portfolioAccess->scopeByClient(Loan::query(), $request->user());
         $active = (clone $base)->where('status', 'active')->count();
         $delinquent = (clone $base)->where('status', 'delinquent')->count();
         $paid = (clone $base)->where('status', 'paid')->count();
@@ -26,12 +29,14 @@ class LoanPortfolioController extends Controller
             'active' => $active + $delinquent,
             'delinquent' => $delinquent,
         ];
-        $loans = Loan::with(['client.activeAssignment.seller.user', 'seller.user', 'application.product'])
+        $loans = $this->portfolioAccess->scopeByClient(Loan::query(), $request->user())
+            ->with(['client.activeAssignment.seller.user', 'seller.user', 'application.product'])
             ->when($request->filled('search'), fn ($q) => $q->where(fn ($q) => $q->where('number', 'like', '%'.$request->search.'%')->orWhereHas('client', fn ($q) => $q->where('full_name', 'like', '%'.$request->search.'%')->orWhere('identity_number', 'like', '%'.$request->search.'%'))))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
             ->when($request->filled('seller'), fn ($q) => $q->where('seller_id', $request->integer('seller')))
             ->latest('disbursed_at')->paginate(15)->withQueryString();
-        $sellers = SellerProfile::with('user')->where('status', 'active')
+        $sellers = $this->portfolioAccess->scopeSellers(SellerProfile::query(), $request->user())
+            ->with('user')->where('status', 'active')
             ->whereHas('portfolioAssignments', fn ($q) => $q->whereNull('ended_at'))->orderBy('code')->get();
         $situation = $total === 0
             ? 'Todavía no hay créditos en cartera.'
@@ -52,7 +57,7 @@ class LoanPortfolioController extends Controller
                     ['key' => 'delinquent', 'tone' => 'bad', 'label' => 'En mora', 'value' => $delinquent],
                     ['key' => 'paid', 'tone' => 'muted', 'label' => 'Pagados', 'value' => $paid],
                 ],
-                'growth' => OperationalMesa::monthlyGrowth(Loan::query()->whereNotNull('disbursed_at'), 'disbursed_at'),
+                'growth' => OperationalMesa::monthlyGrowth($this->portfolioAccess->scopeByClient(Loan::query(), $request->user())->whereNotNull('disbursed_at'), 'disbursed_at'),
             ],
             'sellers' => $sellers,
             'filters' => $request->only('search', 'status', 'seller'),
@@ -62,6 +67,7 @@ class LoanPortfolioController extends Controller
 
     public function show(Loan $loan)
     {
+        $this->portfolioAccess->authorizeClientId(request()->user(), (int) $loan->client_id);
         $loan->load(['client.activeAssignment.seller.user', 'seller.user', 'application.product', 'disbursement.disbursedBy', 'installments', 'payments.allocations.installment', 'collectionRecords.collector.user', 'collectionRecords.recordedBy', 'guarantees.guarantor', 'activeDelinquencyCase.items']);
         $timeline = collect([
             ['date' => $loan->application->created_at, 'type' => 'Solicitud', 'title' => $loan->application->number, 'description' => 'Solicitud registrada'],
@@ -89,6 +95,7 @@ class LoanPortfolioController extends Controller
 
     public function updateStatus(Request $request, Loan $loan)
     {
+        $this->portfolioAccess->authorizeClientId($request->user(), (int) $loan->client_id);
         $data = $request->validate(['status' => ['required', Rule::in(['active', 'delinquent', 'paid'])]]);
         if ($loan->status === 'paid') {
             return back()->with('success', 'El crédito ya está pagado y su estado se conserva como registro financiero final.');

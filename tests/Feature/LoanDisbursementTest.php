@@ -9,6 +9,7 @@ use App\Models\Loan;
 use App\Models\SellerProfile;
 use App\Models\User;
 use Database\Seeders\ClientModuleSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -22,6 +23,8 @@ class LoanDisbursementTest extends TestCase
     {
         $this->seed(ClientModuleSeeder::class);
         $user = User::firstOrFail();
+        $client = Client::firstOrFail();
+        $this->settleOpenLoans($client);
         $application = $this->approvedApplication();
         $key = (string) Str::uuid();
 
@@ -38,6 +41,7 @@ class LoanDisbursementTest extends TestCase
         $response->assertRedirect(route('loans.show', $loan));
         $this->assertSame('disbursed', $application->fresh()->status);
         $this->assertSame('active', $loan->status);
+        $this->assertSame('OPEN', $loan->open_guard);
         $this->assertSame('5000.00', $loan->principal_balance);
         $this->assertDatabaseHas('loan_disbursements', ['idempotency_key' => $key, 'loan_id' => $loan->id, 'amount' => '5000.00']);
 
@@ -56,6 +60,52 @@ class LoanDisbursementTest extends TestCase
 
     }
 
+    public function test_client_with_an_open_credit_cannot_receive_a_second_disbursement(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $user = User::firstOrFail();
+        $client = Client::firstOrFail();
+        $openLoan = $client->loans()->whereIn('status', Loan::COLLECTIBLE_STATUSES)->firstOrFail();
+        $application = $this->approvedApplication();
+
+        $this->actingAs($user)->post(route('applications.disburse', $application), [
+            'idempotency_key' => (string) Str::uuid(),
+            'disbursed_at' => today()->format('Y-m-d'),
+            'payment_method' => 'cash',
+        ])->assertSessionHasErrors([
+            'disbursement' => 'Este cliente ya tiene un crédito activo o en mora. Debe finalizarlo antes de recibir otro crédito.',
+        ]);
+
+        $this->assertDatabaseMissing('loans', ['credit_application_id' => $application->id]);
+        $this->assertDatabaseMissing('loan_disbursements', ['credit_application_id' => $application->id]);
+        $this->assertSame('OPEN', $openLoan->fresh()->open_guard);
+        $this->assertSame('approved', $application->fresh()->status);
+    }
+
+    public function test_database_constraint_rejects_a_second_open_loan_for_the_same_client(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $application = $this->approvedApplication();
+
+        $this->expectException(QueryException::class);
+
+        Loan::create([
+            'number' => 'PRE-DUPLICATE',
+            'credit_application_id' => $application->id,
+            'client_id' => $application->client_id,
+            'seller_id' => $application->seller_id,
+            'status' => 'active',
+            'currency' => 'NIO',
+            'principal' => '5000.00',
+            'principal_balance' => '5000.00',
+            'interest_balance' => '0.00',
+            'fee_balance' => '0.00',
+            'delinquency_balance' => '0.00',
+            'approved_terms' => [],
+            'disbursed_at' => today(),
+        ]);
+    }
+
     public function test_unapproved_application_cannot_be_disbursed(): void
     {
         $this->seed(ClientModuleSeeder::class);
@@ -70,6 +120,21 @@ class LoanDisbursementTest extends TestCase
         ])->assertSessionHasErrors('disbursement');
 
         $this->assertDatabaseMissing('loans', ['credit_application_id' => $application->id]);
+    }
+
+    private function settleOpenLoans(Client $client): void
+    {
+        $client->loans()->whereIn('status', Loan::COLLECTIBLE_STATUSES)->get()->each->update([
+            'status' => 'paid',
+            'principal_balance' => '0.00',
+            'interest_balance' => '0.00',
+            'fee_balance' => '0.00',
+            'delinquency_balance' => '0.00',
+            'closed_at' => now(),
+        ]);
+
+        $this->assertFalse($client->fresh()->hasOpenCredit());
+        $this->assertNull($client->loans()->firstOrFail()->open_guard);
     }
 
     private function approvedApplication(): CreditApplication

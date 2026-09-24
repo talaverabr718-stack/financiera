@@ -16,6 +16,8 @@ class FinancialReportService
 {
     public const TYPES = ['portfolio' => 'Cartera', 'collections' => 'Cobranza', 'applications' => 'Solicitudes', 'disbursements' => 'Desembolsos', 'routes' => 'Rutas', 'accounting' => 'Contabilidad'];
 
+    public function __construct(private PortfolioAccessService $portfolioAccess) {}
+
     public function query(string $type, string $from, string $to, Request $request): Builder
     {
         $query = match ($type) {
@@ -25,6 +27,12 @@ class FinancialReportService
             'disbursements' => LoanDisbursement::with(['application.client', 'loan', 'disbursedBy'])->whereBetween('disbursed_at', [$from, $to]),
             'routes' => CollectionRoute::with(['collector.user'])->withCount('stops')->whereBetween('scheduled_date', [$from, $to]),
             'accounting' => JournalEntry::with('user')->whereBetween('date', [$from, $to]),
+        };
+        $query = match ($type) {
+            'portfolio', 'collections', 'applications' => $this->portfolioAccess->scopeByClient($query, $request->user()),
+            'disbursements' => $query->whereHas('application', fn (Builder $application) => $this->portfolioAccess->scopeByClient($application, $request->user())),
+            'routes' => $this->portfolioAccess->scopeBySeller($query, $request->user(), 'collector_id'),
+            'accounting' => $query,
         };
         if ($request->filled('status')) {
             $statusColumn = $type === 'collections' ? 'outcome' : ($type === 'disbursements' ? 'payment_method' : 'status');
@@ -46,12 +54,12 @@ class FinancialReportService
     public function summary(string $type, Builder $query): array
     {
         return match ($type) {
-            'portfolio' => ['count' => (clone $query)->count(), 'primary' => (clone $query)->sum('principal'), 'secondary' => (clone $query)->selectRaw('COALESCE(SUM(principal_balance+interest_balance+fee_balance+delinquency_balance),0) total')->value('total'), 'primary_label' => 'Monto colocado', 'secondary_label' => 'Saldo pendiente'],
+            'portfolio' => ['count' => (clone $query)->count(), 'primary' => (clone $query)->sum('principal'), 'secondary' => (clone $query)->selectRaw('COALESCE(SUM(principal_balance+interest_balance+fee_balance),0) total')->value('total'), 'primary_label' => 'Monto colocado', 'secondary_label' => 'Saldo pendiente'],
             'collections' => ['count' => (clone $query)->count(), 'primary' => (clone $query)->where('outcome', 'collected')->sum('amount'), 'secondary' => (clone $query)->where('outcome', 'promise')->count(), 'primary_label' => 'Monto cobrado', 'secondary_label' => 'Promesas'],
             'applications' => ['count' => (clone $query)->count(), 'primary' => (clone $query)->sum('requested_amount'), 'secondary' => (clone $query)->sum('approved_amount'), 'primary_label' => 'Monto solicitado', 'secondary_label' => 'Monto aprobado'],
             'disbursements' => ['count' => (clone $query)->count(), 'primary' => (clone $query)->sum('amount'), 'secondary' => (clone $query)->where('payment_method', 'cash')->sum('amount'), 'primary_label' => 'Total desembolsado', 'secondary_label' => 'Entregado en efectivo'],
             'routes' => ['count' => (clone $query)->count(), 'primary' => (clone $query)->withCount('stops')->get()->sum('stops_count'), 'secondary' => (clone $query)->where('status', 'completed')->count(), 'primary_label' => 'Clientes programados', 'secondary_label' => 'Rutas finalizadas'],
-            'accounting' => ['count' => (clone $query)->count(), 'primary' => (clone $query)->whereIn('status', ['posted', 'reversed'])->sum('total_debit'), 'secondary' => (clone $query)->where('status', 'draft')->count(), 'primary_label' => 'Movimientos contabilizados', 'secondary_label' => 'Borradores'],
+            'accounting' => ['count' => (clone $query)->count(), 'primary' => (clone $query)->where('status', 'posted')->sum('total_debit'), 'secondary' => (clone $query)->where('status', 'draft')->count(), 'primary_label' => 'Movimientos contabilizados', 'secondary_label' => 'Borradores'],
         };
     }
 

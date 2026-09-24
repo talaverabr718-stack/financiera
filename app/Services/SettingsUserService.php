@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\SellerProfile;
+use App\Models\SystemRole;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -14,6 +15,7 @@ class SettingsUserService
         return DB::transaction(function () use ($data): User {
             $collaborator = $this->availableCollaborator($data['collaborator_id'] ?? null);
             $user = User::create([
+                'system_role_id' => $data['system_role_id'] ?? SystemRole::where('key', 'administrator')->value('id'),
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'password' => $data['password'],
@@ -42,6 +44,7 @@ class SettingsUserService
             $targetProfile?->update(['user_id' => $locked->id]);
 
             $values = ['name' => $data['name'], 'email' => $data['email']];
+            if (! empty($data['system_role_id'])) $values['system_role_id'] = $data['system_role_id'];
             if (! empty($data['password'])) $values['password'] = $data['password'];
             if (! empty($data['pin'])) $values['pin'] = $data['pin'];
             if (! empty($data['remove_pin'])) $values['pin'] = null;

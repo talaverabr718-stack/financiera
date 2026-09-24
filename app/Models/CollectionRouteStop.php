@@ -43,6 +43,11 @@ class CollectionRouteStop extends Model
         return $this->hasMany(CollectionRecord::class)->latest('recorded_at');
     }
 
+    public function additionalPaymentAuthorization()
+    {
+        return $this->hasOne(CollectionAdditionalPaymentAuthorization::class, 'collection_route_stop_id');
+    }
+
     public function collectorDuesOn(CarbonInterface $asOf): array
     {
         $this->loadMissing('client.loans.installments');

@@ -9,10 +9,12 @@ use App\Models\Guarantor;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 
 class CreditApplicationService
 {
-    public function __construct(private DocumentSequenceService $sequences, private AmortizationCalculator $calculator) {}
+    public function __construct(private DocumentSequenceService $sequences, private SimpleInterestProjectionService $projection) {}
 
     public function create(array $data): CreditApplication
     {
@@ -45,33 +47,35 @@ class CreditApplicationService
             return $data;
         }
 
-        $data['interest_method'] = ! empty($data['interest_method']) ? $data['interest_method'] : $product->default_interest_method;
+        $data['interest_method'] = SimpleInterestProjectionService::INTEREST_METHOD;
         $data['administrative_fee'] = array_key_exists('administrative_fee', $data) && $data['administrative_fee'] !== null && $data['administrative_fee'] !== ''
             ? $data['administrative_fee']
             : ($product->default_administrative_fee ?? '0.00');
-        $data['interest_rate'] = ! empty($data['interest_rate']) ? $data['interest_rate'] : $product->default_interest_rate;
+        $data['interest_rate'] = array_key_exists('interest_rate', $data) && $data['interest_rate'] !== null && $data['interest_rate'] !== ''
+            ? $data['interest_rate']
+            : $product->default_interest_rate;
 
         return $this->withProjectedPayment($data);
     }
 
     private function withProjectedPayment(array $data): array
     {
-        $term = (int) ($data['term'] ?? 0);
-        $frequency = $data['payment_frequency'] ?? null;
-        $principal = $data['requested_amount'] ?? null;
-        if ($term < 1 || $principal === null || ! isset(AmortizationCalculator::FREQUENCIES[$frequency])) {
-            return $data;
+        try {
+            $projection = $this->projection->calculate(
+                $data['requested_amount'],
+                $data['interest_rate'] ?? 0,
+                (int) ($data['term_value'] ?? 0),
+                (string) ($data['term_unit'] ?? ''),
+                (string) ($data['payment_frequency'] ?? ''),
+            );
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['term_value' => $exception->getMessage()]);
         }
 
-        $schedule = $this->calculator->calculate([
-            'principal' => $principal,
-            'annual_rate' => $data['interest_rate'] ?? 0,
-            'periods' => $term,
-            'method' => $this->calculator->resolveCalculatorMethod($data['interest_method'] ?? null),
-            'frequency' => $frequency,
-            'first_payment_date' => $data['applied_on'] ?? now()->toDateString(),
-        ]);
-        $data['installment_amount'] = $schedule['rows'][0]['payment'];
+        $data['term'] = $projection['payments'];
+        $data['installment_amount'] = $projection['installment_amount'];
+        $data['total_interest'] = $projection['total_interest'];
+        $data['total_payable'] = $projection['total_payable'];
 
         return $data;
     }

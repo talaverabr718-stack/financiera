@@ -1,7 +1,9 @@
 <script setup>
 import { router } from '@inertiajs/vue3';
 import AppLayout from '../../Layouts/AppLayout.vue';
+import { usePermissions } from '../../composables/usePermissions.js';
 
+const { canManage, canFull } = usePermissions();
 const props = defineProps({ collaborator: Object, endpoints: Object });
 const date = value => value ? new Intl.DateTimeFormat('es-NI').format(new Date(value)) : '—';
 const inactivate = () => { if (confirm('¿Inactivar este colaborador? Su historial se conservará.')) router.delete(props.endpoints.destroy); };
@@ -9,7 +11,7 @@ const inactivate = () => { if (confirm('¿Inactivar este colaborador? Su histori
 
 <template>
     <AppLayout :title="collaborator.display_name" eyebrow="Colaboradores" :description="`${collaborator.code} · ${collaborator.status}`">
-        <template #header-actions><div class="flex gap-2"><button class="btn-danger" @click="inactivate">Inactivar</button><a :href="endpoints.edit" class="btn-primary">Editar</a></div></template>
+        <template #header-actions><div class="flex gap-2"><button v-if="canFull('collaborators')" class="btn-danger" @click="inactivate">Inactivar</button><a v-if="canManage('collaborators')" :href="endpoints.edit" class="btn-primary">Editar</a></div></template>
         <div class="grid gap-4 xl:grid-cols-[1fr_320px]">
             <div class="space-y-4">
                 <section class="card p-5"><h2 class="font-semibold">Cartera asignada</h2><div class="mt-4 divide-y"><a v-for="assignment in collaborator.portfolio_assignments" :key="assignment.id" :href="`/clientes/${assignment.client.id}`" class="flex justify-between py-3 text-xs"><span class="font-semibold">{{ assignment.client.full_name }}</span><span class="text-slate-400">{{ assignment.ended_at ? 'Finalizada' : 'Activa' }}</span></a><p v-if="!collaborator.portfolio_assignments.length" class="empty-state">Sin clientes asignados.</p></div></section>

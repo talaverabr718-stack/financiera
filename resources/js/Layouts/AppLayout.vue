@@ -1,5 +1,5 @@
 <script setup>
-import { router, usePage } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import AppSidebar from '../components/navigation/AppSidebar.vue';
 import AccountingNav from '../components/accounting/AccountingNav.vue';
@@ -94,7 +94,10 @@ watch(() => page.url, syncSearch);
                         <p class="max-w-28 truncate text-[11px] font-bold text-slate-800">{{ page.props.auth.user?.name }}</p>
                         <p class="truncate text-[9px] text-slate-400">{{ page.props.brand?.system_tagline || 'Estelí' }}</p>
                     </div>
-                    <button type="button" class="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600" title="Cerrar sesión" @click="router.post(page.props.routes.logout)"><span class="hidden sm:inline">Salir</span><span class="sm:hidden">↪</span></button>
+                    <Link href="/configuracion/apariencia" class="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700" title="Personalizar mi apariencia">
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 1 0 0 18h1.5a1.5 1.5 0 0 0 1.25-2.33l-.3-.45a1.5 1.5 0 0 1 1.25-2.33H18A3 3 0 0 0 21 13a10 10 0 0 0-9-10Z" /><path stroke-linecap="round" d="M7.5 10.5h.01M9.5 6.8h.01M14.5 7.2h.01M17 11.5h.01" /></svg>
+                        <span class="hidden 2xl:inline">Mi apariencia</span>
+                    </Link>                    <button type="button" class="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600" title="Cerrar sesión" @click="router.post(page.props.routes.logout)"><span class="hidden sm:inline">Salir</span><span class="sm:hidden">↪</span></button>
                 </div>
             </header>
             <div class="mx-auto max-w-[1720px] p-4 sm:p-5 lg:p-6">

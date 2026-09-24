@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CreditGuarantor;
+use App\Services\PortfolioAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -10,8 +11,11 @@ use Illuminate\Validation\ValidationException;
 
 class CreditGuarantorController extends Controller
 {
+    public function __construct(private PortfolioAccessService $portfolioAccess) {}
+
     public function decision(Request $request, CreditGuarantor $guarantee)
     {
+        $this->portfolioAccess->authorizeClientId($request->user(), (int) $guarantee->application()->value('client_id'));
         $this->authorize('decide', $guarantee);
         $data = $request->validate([
             'status' => ['required', Rule::in(['approved', 'rejected'])],
@@ -31,6 +35,7 @@ class CreditGuarantorController extends Controller
 
     public function release(Request $request, CreditGuarantor $guarantee)
     {
+        $this->portfolioAccess->authorizeClientId($request->user(), (int) $guarantee->application()->value('client_id'));
         $this->authorize('release', $guarantee);
         $data = $request->validate(['reason' => ['required', 'string', 'max:1000'], 'authorized_release' => ['nullable', 'accepted']]);
         $loanIsSettled = $guarantee->loan && in_array($guarantee->loan->status, ['paid', 'cancelled'], true);

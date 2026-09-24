@@ -7,21 +7,26 @@ use App\Http\Requests\UpdateAppearanceSettingsRequest;
 use App\Http\Requests\UpdateBrandSettingsRequest;
 use App\Http\Requests\UpdateGeneralSettingsRequest;
 use App\Http\Requests\UpdateModuleSettingsRequest;
-use App\Http\Requests\UpdatePermissionSettingsRequest;
 use App\Http\Requests\UpdateSequenceSettingsRequest;
 use App\Models\Account;
 use App\Models\CreditProduct;
 use App\Models\SystemModule;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Services\PermissionService;
 use App\Services\SystemSettingService;
+use App\Services\UserAppearanceService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class SettingsController extends Controller
 {
-    public function __construct(private SystemSettingService $settings) {}
+    public function __construct(
+        private SystemSettingService $settings,
+        private UserAppearanceService $appearance,
+    ) {}
 
     public function index()
     {
@@ -30,7 +35,7 @@ class SettingsController extends Controller
         $checks = [
             'brand' => SystemSetting::where('key', 'system_name')->whereNotNull('value')->exists(),
             'modules' => SystemModule::where('is_enabled', false)->doesntExist(),
-            'permissions' => DB::table('system_module_user')->exists(),
+            'permissions' => DB::table('system_roles')->exists(),
             'users' => User::exists(),
             'appearance' => SystemSetting::where('group', 'appearance')->exists(),
             'general' => filled($general['institution_name'] ?? null),
@@ -59,52 +64,25 @@ class SettingsController extends Controller
         return back()->with('success', 'Configuración de módulos aplicada.');
     }
 
-    public function permissions()
+    public function appearance(Request $request)
     {
-        $users = User::orderBy('name')->get(['id', 'name', 'email']);
-        $modules = SystemModule::orderBy('sort_order')->get(['id', 'key', 'name', 'is_enabled']);
-        $stored = DB::table('system_module_user')->get()->keyBy(fn ($row) => $row->user_id.'-'.$row->system_module_id);
-        $permissions = $users->mapWithKeys(fn (User $user) => [(string) $user->id => $modules->mapWithKeys(function (SystemModule $module) use ($stored, $user) {
-            $grant = $stored->get($user->id.'-'.$module->id);
+        $canViewSettings = app(PermissionService::class)->allows($request->user(), 'settings', 'view');
+        $tabs = $canViewSettings
+            ? self::tabs('appearance')
+            : [['label' => 'Apariencia', 'url' => route('settings.appearance'), 'active' => true]];
 
-            return [(string) $module->id => ['view' => $grant ? (bool) $grant->can_view : true, 'manage' => $grant ? (bool) $grant->can_manage : false]];
-        })->all()])->all();
-
-        return Inertia::render('Settings/Permissions', [
-            'users' => $users,
-            'modules' => $modules,
-            'permissions' => $permissions,
-            'endpoints' => ['update' => route('settings.permissions.update')],
-            'tabs' => self::tabs('permissions'),
-
+        return $this->page('appearance', [
+            'settings' => $this->appearance->forUser($request->user()),
+            'update' => route('settings.appearance.update'),
+            'tabs' => $tabs,
         ]);
-    }
-
-    public function updatePermissions(UpdatePermissionSettingsRequest $request)
-    {
-        DB::transaction(function () use ($request): void {
-            $values = $request->validated('permissions', []);
-            foreach (User::get() as $user) {
-                foreach (SystemModule::get() as $module) {
-                    $row = $values[$user->id][$module->id] ?? [];
-                    DB::table('system_module_user')->updateOrInsert(['user_id' => $user->id, 'system_module_id' => $module->id], ['can_view' => (bool) ($row['view'] ?? false), 'can_manage' => (bool) ($row['manage'] ?? false), 'created_at' => now(), 'updated_at' => now()]);
-                }
-            }
-        });
-
-        return back()->with('success', 'Permisos por usuario actualizados.');
-    }
-
-    public function appearance()
-    {
-        return $this->page('appearance', ['settings' => $this->settings->group('appearance'), 'update' => route('settings.appearance.update')]);
     }
 
     public function updateAppearance(UpdateAppearanceSettingsRequest $request)
     {
-        $this->settings->save('appearance', $request->validated(), auth()->id());
+        $this->appearance->save($request->user(), $request->validated());
 
-        return back()->with('success', 'Apariencia aplicada a todo el sistema.');
+        return back()->with('success', 'Tu apariencia personal fue actualizada.');
     }
 
     public function brand()

@@ -15,7 +15,7 @@ class AmortizationCalculatorTest extends TestCase
     {
         $this->get(route('amortization.index'))->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('Amortization/Index')
-            ->has('methods', 3)
+            ->missing('methods')
             ->has('frequencies', 4)
             ->has('navigation', 4)
             ->has('navigation.1.items', 6)
@@ -57,6 +57,44 @@ class AmortizationCalculatorTest extends TestCase
 
         $this->assertSame('0.00', $result['total_interest']);
         $this->assertSame('100.00', $result['rows'][0]['payment']);
+    }
+
+    public function test_monthly_simple_interest_matches_the_approved_weekly_example(): void
+    {
+        $result = app(AmortizationCalculator::class)->calculate([
+            'principal' => '5000.00',
+            'annual_rate' => '16.00',
+            'term_months' => 3,
+            'frequency' => 'weekly',
+            'method' => 'monthly_flat',
+            'first_payment_date' => '2026-09-04',
+        ]);
+
+        $this->assertSame(12, $result['periods']);
+        $this->assertSame(3, $result['term_months']);
+        $this->assertSame('48.000000', $result['total_rate']);
+        $this->assertSame('2400.00', $result['total_interest']);
+        $this->assertSame('7400.00', $result['total_payment']);
+        $this->assertSame('616.67', $result['average_payment']);
+        $this->assertSame('616.67', $result['rows'][0]['payment']);
+        $this->assertSame('616.63', $result['rows'][11]['payment']);
+        $this->assertSame('0.00', $result['rows'][11]['closing_balance']);
+    }
+
+    public function test_monthly_simple_interest_uses_two_biweekly_payments_per_month(): void
+    {
+        $this->postJson(route('amortization.calculate'), [
+            'principal' => '5000.00',
+            'annual_rate' => '16.00',
+            'term_months' => 3,
+            'frequency' => 'biweekly',
+            'method' => 'monthly_flat',
+            'first_payment_date' => '2026-09-15',
+        ])->assertOk()
+            ->assertJsonPath('periods', 6)
+            ->assertJsonPath('total_interest', '2400.00')
+            ->assertJsonPath('total_payment', '7400.00')
+            ->assertJsonCount(6, 'rows');
     }
 
     public function test_installment_projection_includes_interest_in_the_payment_count(): void

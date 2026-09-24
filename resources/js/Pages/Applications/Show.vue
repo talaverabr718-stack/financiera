@@ -2,7 +2,9 @@
 import { computed, reactive, ref } from 'vue';
 import AppLayout from '../../Layouts/AppLayout.vue';
 import BaseModal from '../../components/ui/BaseModal.vue';
+import { usePermissions } from '../../composables/usePermissions.js';
 
+const { canManage, canFull } = usePermissions();
 const props = defineProps({ application: Object, guarantees: Array, endpoints: Object, statusLabels: Object, csrf: String });
 const application = reactive({ ...props.application });
 const decisionOpen = ref(false);
@@ -19,7 +21,7 @@ const visibleGuarantees = computed(() => props.guarantees.filter(item => filters
 const printPage = () => window.print();
 const csrfHeaders = { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': props.csrf };
 const frequencyLabel = value => ({ daily: 'Diaria', weekly: 'Semanal', biweekly: 'Quincenal', monthly: 'Mensual' }[value] ?? value);
-const methodLabel = value => ({ french: 'Cuota nivelada', level_payment: 'Cuota nivelada', flat: 'Interés plano', flat_interest: 'Interés plano', declining_balance: 'Capital constante', constant_principal: 'Capital constante' }[value] ?? (value || 'Por definir'));
+const termUnitLabel = value => ({ daily: 'días', weekly: 'semanas', monthly: 'meses', yearly: 'años' }[value] ?? value);
 const statusTone = computed(() => ({ draft: 'slate', submitted: 'sky', review: 'amber', approved: 'emerald', rejected: 'rose', cancelled: 'slate', disbursed: 'indigo' }[application.status] ?? 'indigo'));
 const summaryFields = computed(() => [
     { label: 'Monto solicitado', value: `${application.currency} ${money(application.requested_amount)}`, tone: 'sky', hint: 'Condición pedida por el cliente' },
@@ -29,11 +31,13 @@ const summaryFields = computed(() => [
 ]);
 const detailFields = computed(() => [
     { label: 'Fecha de solicitud', value: date(application.applied_on), tone: 'cyan' },
+    { label: 'Plazo', value: application.term_value ? `${application.term_value} ${termUnitLabel(application.term_unit)}` : 'Por definir', tone: 'indigo' },
     { label: 'Pagos proyectados', value: `${application.term} pagos`, tone: 'violet' },
-    { label: 'Cuota con interés', value: `${application.currency} ${money(application.installment_amount)}`, tone: 'teal' },
+    { label: 'Pago regular', value: `${application.currency} ${money(application.installment_amount)}`, tone: 'teal' },
     { label: 'Frecuencia', value: frequencyLabel(application.payment_frequency), tone: 'sky' },
-    { label: 'Tasa', value: application.interest_rate ? `${Number(application.interest_rate).toLocaleString('es-NI', { maximumFractionDigits: 4 })}%` : 'Por definir', tone: 'orange' },
-    { label: 'Método', value: methodLabel(application.interest_method), tone: 'slate' },
+    { label: 'Tasa por período', value: application.interest_rate !== null ? `${Number(application.interest_rate).toLocaleString('es-NI', { maximumFractionDigits: 6 })}%` : 'Por definir', tone: 'orange' },
+    { label: 'Interés total', value: `${application.currency} ${money(application.total_interest)}`, tone: 'amber' },
+    { label: 'Monto total', value: `${application.currency} ${money(application.total_payable)}`, tone: 'emerald' },
     { label: 'Primer pago', value: date(application.proposed_first_payment_date), tone: 'amber' },
     { label: 'Vendedor', value: application.seller_name, tone: 'blue' },
 ]);
@@ -69,7 +73,7 @@ const decideGuarantee = async (guarantee, status) => {
 
 <template>
     <AppLayout :title="application.number" eyebrow="Solicitudes" :description="`${application.client_name} · ${application.product_name}`">
-        <template #header-actions><div class="flex gap-2"><a :href="endpoints.index" class="btn-secondary">Volver</a><a v-if="!locked" :href="endpoints.edit" class="btn-secondary">Editar</a><button class="btn-primary" @click="printPage">Imprimir</button></div></template>
+        <template #header-actions><div class="flex gap-2"><a :href="endpoints.index" class="btn-secondary">Volver</a><a v-if="!locked && canManage('applications')" :href="endpoints.edit" class="btn-secondary">Editar</a><button class="btn-primary" @click="printPage">Imprimir</button></div></template>
 
         <div v-if="notice" class="mb-4 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-700"><span>{{ notice }}</span><button @click="notice = ''">×</button></div>
         <div v-if="locked" class="mb-4 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-800"><strong>Solicitud {{ statusLabels[application.status] }}.</strong> El historial de la solicitud permanece protegido. <a v-if="endpoints.loan" :href="endpoints.loan" class="ml-2 font-bold text-indigo-600">Ver préstamo →</a></div>
@@ -82,7 +86,7 @@ const decideGuarantee = async (guarantee, status) => {
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="rounded-full bg-white/80 px-3 py-1 text-[10px] font-bold uppercase tracking-wide">{{ application.status }}</span>
-                    <button v-if="!locked" class="rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white" @click="openDecision">Evaluar solicitud</button>
+                    <button v-if="!locked && canFull('applications')" class="rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white" @click="openDecision">Evaluar solicitud</button>
                 </div>
             </header>
             <div class="panel-body space-y-6">
@@ -106,7 +110,7 @@ const decideGuarantee = async (guarantee, status) => {
                 </div>
             </div>
 
-            <div v-if="application.status === 'approved'" class="grid gap-5 border-t border-emerald-100 bg-emerald-50/40 p-5 lg:grid-cols-2">
+            <div v-if="application.status === 'approved' && canFull('applications')" class="grid gap-5 border-t border-emerald-100 bg-emerald-50/40 p-5 lg:grid-cols-2">
                 <div>
                     <span class="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-bold text-emerald-700">Lista para desembolso</span>
                     <h2 class="mt-3 text-lg font-semibold">Desembolsar {{ application.currency }} {{ money(application.approved_amount) }}</h2>
@@ -149,7 +153,7 @@ const decideGuarantee = async (guarantee, status) => {
                             <span>Vencidas: <b>{{ guarantee.overdue ? 'Sí' : 'No' }}</b></span>
                             <span>Estado: <b>{{ guarantee.status }}</b></span>
                         </div>
-                        <div v-if="!['active','released'].includes(guarantee.status)" class="flex gap-2">
+                        <div v-if="canFull('applications') && !['active','released'].includes(guarantee.status)" class="flex gap-2">
                             <button class="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700" @click="decideGuarantee(guarantee,'approved')">Aprobar</button>
                             <button class="rounded-lg bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700" @click="decideGuarantee(guarantee,'rejected')">Rechazar</button>
                         </div>

@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class CollectionRecord extends Model
 {
-    protected $fillable = ['idempotency_key', 'collection_route_stop_id', 'client_id', 'loan_id', 'payment_id', 'collector_id', 'outcome', 'amount', 'currency', 'payment_method', 'reference', 'promise_date', 'notes', 'application_status', 'recorded_at', 'recorded_by'];
+    protected $fillable = ['idempotency_key', 'collection_route_stop_id', 'client_id', 'loan_id', 'payment_id', 'correction_of_id', 'additional_payment_authorization_id', 'correction_authorization_id', 'collector_id', 'outcome', 'amount', 'currency', 'payment_method', 'reference', 'promise_date', 'notes', 'correction_reason', 'application_status', 'recorded_at', 'recorded_by', 'corrected_by'];
 
     protected function casts(): array
     {
@@ -36,6 +36,31 @@ class CollectionRecord extends Model
     public function payment()
     {
         return $this->belongsTo(Payment::class);
+    }
+
+    public function additionalPaymentAuthorization()
+    {
+        return $this->belongsTo(CollectionAdditionalPaymentAuthorization::class, 'additional_payment_authorization_id');
+    }
+
+    public function correctionAuthorization()
+    {
+        return $this->belongsTo(CollectionPaymentCorrectionAuthorization::class, 'correction_authorization_id');
+    }
+
+    public function correctionOf()
+    {
+        return $this->belongsTo(self::class, 'correction_of_id');
+    }
+
+    public function correction()
+    {
+        return $this->hasOne(self::class, 'correction_of_id');
+    }
+
+    public function correctedBy()
+    {
+        return $this->belongsTo(User::class, 'corrected_by');
     }
 
     public function recordedBy()

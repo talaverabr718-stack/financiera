@@ -10,6 +10,7 @@ use App\Models\CollectionRouteStop;
 use App\Models\SellerProfile;
 use App\Services\AuditService;
 use App\Services\DocumentSequenceService;
+use App\Services\PortfolioAccessService;
 use App\Support\OperationalMesa;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -22,10 +23,12 @@ use Inertia\Inertia;
 
 class CollectionRouteController extends Controller
 {
+    public function __construct(private PortfolioAccessService $portfolioAccess) {}
+
     public function index(Request $request)
     {
         $date = $request->date('date') ?? today();
-        $routes = CollectionRoute::with([
+        $routes = $this->portfolioAccess->scopeBySeller(CollectionRoute::query(), $request->user(), 'collector_id')->with([
             'collector.user',
             'stops.client.loans.installments',
             'stops.records' => fn ($query) => $query->where('outcome', 'collected')->latest('recorded_at'),
@@ -79,6 +82,7 @@ class CollectionRouteController extends Controller
     public function store(CollectionRouteRequest $request, DocumentSequenceService $sequences)
     {
         $data = $request->validated();
+        $this->authorizeRouteData($request, $data);
 
         $routes = DB::transaction(function () use ($data, $sequences) {
             $start = Carbon::parse($data['scheduled_date'])->startOfDay();
@@ -111,6 +115,7 @@ class CollectionRouteController extends Controller
 
     public function edit(CollectionRoute $collectionRoute)
     {
+        $this->portfolioAccess->authorizeSellerId(request()->user(), (int) $collectionRoute->collector_id);
         $collectionRoute->load('stops.records');
 
         return $this->form($collectionRoute);
@@ -118,7 +123,9 @@ class CollectionRouteController extends Controller
 
     public function update(CollectionRouteRequest $request, CollectionRoute $collectionRoute)
     {
+        $this->portfolioAccess->authorizeSellerId($request->user(), (int) $collectionRoute->collector_id);
         $data = $request->validated();
+        $this->authorizeRouteData($request, $data);
         $clientIds = collect($data['client_ids'])->map(fn ($id) => (int) $id)->values();
 
         DB::transaction(function () use ($collectionRoute, $data, $clientIds): void {
@@ -145,6 +152,7 @@ class CollectionRouteController extends Controller
 
     public function updateStatus(Request $request, CollectionRoute $collectionRoute)
     {
+        $this->portfolioAccess->authorizeSellerId($request->user(), (int) $collectionRoute->collector_id);
         $data = $request->validate(['status' => ['required', Rule::in(['planned', 'active', 'completed', 'cancelled'])]]);
         $collectionRoute->update($data);
 
@@ -153,6 +161,9 @@ class CollectionRouteController extends Controller
 
     public function markVisited(MarkRouteStopVisitedRequest $request, CollectionRouteStop $stop, AuditService $audit)
     {
+        $stop->loadMissing('route');
+        $this->portfolioAccess->authorizeSellerId($request->user(), (int) $stop->route->collector_id);
+        $this->portfolioAccess->authorizeClientId($request->user(), (int) $stop->client_id);
         $stop = DB::transaction(function () use ($request, $stop, $audit) {
             $lockedStop = CollectionRouteStop::with(['client', 'route'])->lockForUpdate()->findOrFail($stop->id);
 
@@ -210,10 +221,18 @@ class CollectionRouteController extends Controller
 
         return Inertia::render('Routes/Form', [
             'route' => $route,
-            'sellers' => SellerProfile::with('user')->where('status', 'active')->whereJsonContains('capabilities', 'collections')->get(),
-            'clients' => Client::with('activeAssignment')->where('status', 'active')->orderBy('full_name')->get(),
+            'sellers' => $this->portfolioAccess->scopeSellers(SellerProfile::query(), request()->user())->with('user')->where('status', 'active')->whereJsonContains('capabilities', 'collections')->get(),
+            'clients' => $this->portfolioAccess->scopeClients(Client::query(), request()->user())->with('activeAssignment')->where('status', 'active')->orderBy('full_name')->get(),
             'selectedIds' => $selectedIds, 'lockedIds' => $lockedIds, 'editing' => $route->exists,
             'endpoints' => ['index' => route('routes.index'), 'save' => $route->exists ? route('routes.update', $route) : route('routes.store')],
         ]);
+    }
+
+    private function authorizeRouteData(Request $request, array $data): void
+    {
+        $this->portfolioAccess->authorizeSellerId($request->user(), (int) $data['collector_id']);
+        foreach ($data['client_ids'] as $clientId) {
+            $this->portfolioAccess->authorizeClientId($request->user(), (int) $clientId);
+        }
     }
 }

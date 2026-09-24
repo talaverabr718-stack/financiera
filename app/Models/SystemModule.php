@@ -15,6 +15,13 @@ class SystemModule extends Model
 
     public function users()
     {
-        return $this->belongsToMany(User::class)->withPivot(['can_view', 'can_manage'])->withTimestamps();
+        return $this->belongsToMany(User::class)->withPivot(['can_view', 'can_manage', 'can_full'])->withTimestamps();
+    }
+
+    public function roles()
+    {
+        return $this->belongsToMany(SystemRole::class, 'system_module_role')
+            ->withPivot(['can_view', 'can_manage', 'can_full'])
+            ->withTimestamps();
     }
 }

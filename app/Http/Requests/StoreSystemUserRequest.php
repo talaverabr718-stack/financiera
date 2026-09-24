@@ -15,6 +15,7 @@ class StoreSystemUserRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'system_role_id' => ['nullable', Rule::exists('system_roles', 'id')->where('is_active', true)],
             'name' => ['required', 'string', 'max:180'],
             'email' => ['required', 'email', 'max:180', Rule::unique('users', 'email')],
             'password' => ['required', 'string', 'min:8', 'confirmed'],

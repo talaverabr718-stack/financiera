@@ -12,7 +12,7 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
-    protected $fillable = ['name', 'email', 'password', 'pin', 'is_active'];
+    protected $fillable = ['system_role_id', 'name', 'email', 'password', 'pin', 'is_active'];
 
     protected $hidden = ['password', 'pin', 'remember_token'];
 
@@ -34,5 +34,22 @@ class User extends Authenticatable
     public function sellerProfile()
     {
         return $this->hasOne(SellerProfile::class);
+    }
+
+    public function role()
+    {
+        return $this->belongsTo(SystemRole::class, 'system_role_id');
+    }
+
+    public function moduleOverrides()
+    {
+        return $this->belongsToMany(SystemModule::class)
+            ->withPivot(['can_view', 'can_manage', 'can_full'])
+            ->withTimestamps();
+    }
+
+    public function appearancePreference()
+    {
+        return $this->hasOne(UserAppearancePreference::class);
     }
 }

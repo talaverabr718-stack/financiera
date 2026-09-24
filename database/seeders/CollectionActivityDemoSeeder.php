@@ -33,19 +33,29 @@ class CollectionActivityDemoSeeder extends Seeder
         ]);
 
         $stops = $routes->flatMap(function (CollectionRoute $route) use ($clients) {
-            return $clients->values()->map(function (Client $client, int $index) use ($route) {
-                return $route->stops()->updateOrCreate(
-                    ['client_id' => $client->id],
-                    [
-                        'position' => $index + 1,
-                        'status' => $route->scheduled_date->isToday()
-                            ? ($index === 0 ? 'visited' : 'pending')
-                            : ($route->scheduled_date->isFuture() ? 'pending' : 'visited'),
-                        'visited_at' => ($route->scheduled_date->isToday() && $index !== 0) || $route->scheduled_date->isFuture()
-                            ? null
-                            : now(),
-                    ]
-                );
+            $nextPosition = ((int) $route->stops()->max('position')) + 1;
+
+            return $clients->values()->map(function (Client $client, int $index) use ($route, &$nextPosition) {
+                $values = [
+                    'status' => $route->scheduled_date->isToday()
+                        ? ($index === 0 ? 'visited' : 'pending')
+                        : ($route->scheduled_date->isFuture() ? 'pending' : 'visited'),
+                    'visited_at' => ($route->scheduled_date->isToday() && $index !== 0) || $route->scheduled_date->isFuture()
+                        ? null
+                        : now(),
+                ];
+                $stop = $route->stops()->where('client_id', $client->id)->first();
+
+                if ($stop) {
+                    $stop->update($values);
+
+                    return $stop;
+                }
+
+                return $route->stops()->create($values + [
+                    'client_id' => $client->id,
+                    'position' => $nextPosition++,
+                ]);
             });
         })->values();
 
@@ -67,10 +77,11 @@ class CollectionActivityDemoSeeder extends Seeder
                 [
                     'collection_route_stop_id' => $stop->id,
                     'outcome' => $outcome,
-                    'recorded_at' => $recordedAt,
+                    'notes' => $notes,
                 ],
                 [
                     'idempotency_key' => (string) Str::uuid(),
+                    'recorded_at' => $recordedAt,
                     'client_id' => $stop->client_id,
                     'loan_id' => $loans[$stop->client_id]->id ?? null,
                     'collector_id' => $collector->id,

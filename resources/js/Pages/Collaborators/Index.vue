@@ -4,7 +4,9 @@ import DataTable from '../../components/ui/DataTable.vue';
 import PaginationLinks from '../../components/ui/PaginationLinks.vue';
 import ResourceToolbar from '../../components/ui/ResourceToolbar.vue';
 import { useResourceFilters } from '../../composables/useResourceFilters';
+import { usePermissions } from '../../composables/usePermissions.js';
 
+const { canManage } = usePermissions();
 const props = defineProps({ collaborators: Object, filters: Object, endpoints: Object });
 const { filters, clear } = useResourceFilters({ search: props.filters.search || '', status: props.filters.status || '' }, props.endpoints.index);
 const columns = [{ key: 'code', label: 'Código' }, { key: 'display_name', label: 'Colaborador' }, { key: 'branch', label: 'Sucursal' }, { key: 'active_clients_count', label: 'Clientes activos' }, { key: 'status', label: 'Estado' }, { key: 'actions', label: '' }];
@@ -12,7 +14,7 @@ const columns = [{ key: 'code', label: 'Código' }, { key: 'display_name', label
 
 <template>
     <AppLayout title="Colaboradores" eyebrow="Equipo" description="Datos personales, sucursal y cartera asignada.">
-        <template #header-actions><a :href="endpoints.create" class="btn-primary">Nuevo colaborador</a></template>
+        <template v-if="canManage('collaborators')" #header-actions><a :href="endpoints.create" class="btn-primary">Nuevo colaborador</a></template>
         <ResourceToolbar v-model="filters.search" v-model:status="filters.status" :statuses="[{ value: 'active', label: 'Activos' }, { value: 'inactive', label: 'Inactivos' }, { value: 'suspended', label: 'Suspendidos' }]" @clear="clear" />
         <DataTable class="mt-4" :columns="columns" :rows="collaborators.data">
             <template #cell-display_name="{ row }"><div><p class="font-semibold">{{ row.display_name }}</p><p class="text-[10px] text-slate-400">{{ row.display_email || 'Sin correo' }}</p></div></template>

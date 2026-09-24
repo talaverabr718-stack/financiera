@@ -7,22 +7,24 @@ use App\Models\User;
 
 class NavigationService
 {
+    public function __construct(private PermissionService $permissions) {}
+
     public function forUser(?User $user): array
     {
         if (! $user) {
             return [];
         }
 
-        $modules = SystemModule::with(['users' => fn ($query) => $query->whereKey($user->id)])
-            ->get()->keyBy('key');
-        $allowed = function (string $key) use ($modules): bool {
+        $modules = SystemModule::get()->keyBy('key');
+        $effective = $this->permissions->effectiveFor($user, $modules->values());
+        $allowed = function (string $key) use ($modules, $effective): bool {
             $module = $modules->get($key);
-            $grant = $module?->users->first()?->pivot;
 
-            return ! $module || ($module->is_enabled && $module->is_visible && (! $grant || $grant->can_view));
+            return ! $module || ($module->is_enabled && $module->is_visible && ($effective->get($key)['view'] ?? false));
         };
 
         return collect([
+
             ['group' => 'Resumen', 'items' => [
                 ['key' => 'dashboard', 'label' => 'Panel general', 'url' => route('dashboard'), 'inertia' => true],
             ]],

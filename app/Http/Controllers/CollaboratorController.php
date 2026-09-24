@@ -6,16 +6,21 @@ use App\Http\Requests\CollaboratorRequest;
 use App\Models\Branch;
 use App\Models\SellerProfile;
 use App\Services\CollaboratorService;
+use App\Services\PortfolioAccessService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class CollaboratorController extends Controller
 {
-    public function __construct(private CollaboratorService $collaborators) {}
+    public function __construct(
+        private CollaboratorService $collaborators,
+        private PortfolioAccessService $portfolioAccess,
+    ) {}
 
     public function index(Request $request)
     {
-        $collaborators = SellerProfile::with(['user', 'branch'])
+        $collaborators = $this->portfolioAccess->scopeSellers(SellerProfile::query(), $request->user())
+            ->with(['user', 'branch'])
             ->withCount(['portfolioAssignments as active_clients_count' => fn ($q) => $q->whereNull('ended_at'), 'collectionRoutes'])
             ->when($request->filled('search'), fn ($q) => $q->where(fn ($q) => $q
                 ->where('code', 'like', '%'.$request->search.'%')
@@ -35,11 +40,13 @@ class CollaboratorController extends Controller
 
     public function create()
     {
+        $this->portfolioAccess->authorizeGlobal(request()->user());
         return $this->form(new SellerProfile);
     }
 
     public function store(CollaboratorRequest $request)
     {
+        $this->portfolioAccess->authorizeGlobal($request->user());
         $collaborator = $this->collaborators->create($request->validated());
 
         return redirect()->route('collaborators.show', $collaborator)->with('success', 'Colaborador registrado correctamente.');
@@ -47,6 +54,7 @@ class CollaboratorController extends Controller
 
     public function show(SellerProfile $collaborator)
     {
+        $this->portfolioAccess->authorizeSellerId(request()->user(), (int) $collaborator->id);
         $collaborator->load(['user', 'branch', 'portfolioAssignments.client', 'collectionRoutes' => fn ($q) => $q->latest('scheduled_date')->limit(10)]);
 
         return Inertia::render('Collaborators/Show', ['collaborator' => $collaborator, 'endpoints' => ['edit' => route('collaborators.edit', $collaborator), 'destroy' => route('collaborators.destroy', $collaborator), 'index' => route('collaborators.index')]]);
@@ -54,11 +62,13 @@ class CollaboratorController extends Controller
 
     public function edit(SellerProfile $collaborator)
     {
+        $this->portfolioAccess->authorizeSellerId(request()->user(), (int) $collaborator->id);
         return $this->form($collaborator->load('user'));
     }
 
     public function update(CollaboratorRequest $request, SellerProfile $collaborator)
     {
+        $this->portfolioAccess->authorizeSellerId($request->user(), (int) $collaborator->id);
         $this->collaborators->update($collaborator, $request->validated());
 
         return redirect()->route('collaborators.show', $collaborator)->with('success', 'Colaborador actualizado.');
@@ -66,6 +76,7 @@ class CollaboratorController extends Controller
 
     public function destroy(SellerProfile $collaborator)
     {
+        $this->portfolioAccess->authorizeSellerId(request()->user(), (int) $collaborator->id);
         $this->collaborators->inactivate($collaborator);
 
         return back()->with('success', 'Colaborador inactivado sin eliminar su historial.');

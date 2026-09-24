@@ -23,6 +23,7 @@ const partLabel = value => ({
             <small>Comprobante de pago</small>
         </header>
         <p class="collection-ticket-number">{{ ticket.receipt_number }}</p>
+        <p v-if="ticket.status === 'reversed'" class="collection-ticket-void">ANULADO · {{ ticket.reversal_number }}</p>
         <p class="collection-ticket-meta">{{ ticket.received_at }}</p>
         <dl>
             <div><dt>Cliente</dt><dd>{{ ticket.client }}</dd></div>
@@ -50,6 +51,7 @@ const partLabel = value => ({
         <p class="collection-ticket-total"><span>Total pagado</span><b>{{ money(ticket.amount) }}</b></p>
         <p class="collection-ticket-balance"><span>Saldo anterior</span><span>{{ money(ticket.previous_balance) }}</span></p>
         <p class="collection-ticket-balance"><span>Saldo pendiente</span><span>{{ money(ticket.new_balance) }}</span></p>
-        <footer>Conserve este ticket como registro del abono aplicado a las cuotas.</footer>
+        <footer v-if="ticket.status === 'reversed'">Este comprobante fue anulado y no representa un pago vigente.</footer>
+        <footer v-else>Conserve este ticket como registro del abono aplicado a las cuotas.</footer>
     </article>
 </template>

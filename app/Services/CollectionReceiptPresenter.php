@@ -10,7 +10,7 @@ class CollectionReceiptPresenter
 {
     public function fromPayment(Payment $payment): array
     {
-        $payment->loadMissing(['client', 'loan', 'collector', 'creator', 'allocations.installment']);
+        $payment->loadMissing(['client', 'loan', 'collector', 'creator', 'allocations.installment', 'reversal']);
 
         $receivedAt = $payment->received_at?->timezone(config('app.timezone'));
 
@@ -26,6 +26,8 @@ class CollectionReceiptPresenter
             'reference' => $payment->reference,
             'previous_balance' => (string) $payment->previous_balance,
             'new_balance' => (string) $payment->new_balance,
+            'status' => $payment->reversal ? 'reversed' : $payment->status,
+            'reversal_number' => $payment->reversal?->number,
             'collector' => $payment->collector?->name ?? $payment->creator?->name,
             'installments' => $this->installmentLines($payment->allocations),
         ];

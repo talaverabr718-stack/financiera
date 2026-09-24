@@ -9,13 +9,17 @@ use App\Models\CreditApplication;
 use App\Models\SellerProfile;
 use App\Services\ClientService;
 use App\Services\DelinquencyTrackingService;
+use App\Services\PortfolioAccessService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class ClientController extends Controller
 {
-    public function __construct(private ClientService $clients) {}
+    public function __construct(
+        private ClientService $clients,
+        private PortfolioAccessService $portfolioAccess,
+    ) {}
 
     public function index(Request $request)
     {
@@ -54,7 +58,8 @@ class ClientController extends Controller
             return response()->json(['data' => []]);
         }
 
-        $sellers = SellerProfile::query()->with('user:id,name')
+        $sellers = $this->portfolioAccess->scopeSellers(SellerProfile::query(), $request->user())
+            ->with('user:id,name')
             ->where('status', 'active')->whereJsonContains('capabilities', 'prospecting')
             ->where(fn ($query) => $query->where('code', 'like', '%'.$term.'%')
                 ->orWhereHas('user', fn ($user) => $user->where('name', 'like', '%'.$term.'%')))
@@ -70,13 +75,16 @@ class ClientController extends Controller
 
     public function store(ClientRequest $request)
     {
-        $client = $this->clients->create($request->validated());
+        $data = $request->validated();
+        $this->portfolioAccess->authorizeSellerId($request->user(), (int) $data['seller_id']);
+        $client = $this->clients->create($data);
 
         return redirect()->route('clients.show', $client)->with('success', 'Cliente registrado correctamente.');
     }
 
     public function show(Client $client)
     {
+        $this->portfolioAccess->authorizeClient(request()->user(), $client);
         $client->load(['activeAssignment.seller.user', 'portfolioAssignments.seller.user', 'portfolioAssignments.previousSeller.user', 'portfolioAssignments.assignedBy', 'assets', 'creditApplications.product', 'creditApplications.disbursement.disbursedBy', 'loans.installments.paymentAllocations.payment.reversal', 'loans.activeDelinquencyCase', 'loans.collectionRecords.recordedBy', 'usedGuarantees.guarantor', 'usedGuarantees.loan', 'collectionRecords.collector.user', 'collectionRecords.recordedBy']);
 
         $timeline = collect([['type' => 'client', 'date' => $client->created_at, 'title' => 'Cliente registrado', 'description' => 'Se creó el expediente '.$client->code, 'url' => null]])
@@ -131,6 +139,7 @@ class ClientController extends Controller
 
     public function edit(Client $client)
     {
+        $this->portfolioAccess->authorizeClient(request()->user(), $client);
         $client->load(['assets']);
 
         return $this->formPage($client);
@@ -138,13 +147,17 @@ class ClientController extends Controller
 
     public function update(ClientRequest $request, Client $client)
     {
-        $this->clients->update($client, $request->validated());
+        $this->portfolioAccess->authorizeClient($request->user(), $client);
+        $data = $request->validated();
+        $this->portfolioAccess->authorizeSellerId($request->user(), (int) $data['seller_id']);
+        $this->clients->update($client, $data);
 
         return redirect()->route('clients.show', $client)->with('success', 'Expediente actualizado.');
     }
 
     public function destroy(Client $client)
     {
+        $this->portfolioAccess->authorizeClient(request()->user(), $client);
         $client->update(['status' => 'inactive']);
 
         return back()->with('success', 'Cliente inactivado sin eliminar su historial.');
@@ -152,6 +165,8 @@ class ClientController extends Controller
 
     public function transfer(TransferClientRequest $request, Client $client)
     {
+        $this->portfolioAccess->authorizeClient($request->user(), $client);
+        $this->portfolioAccess->authorizeGlobal($request->user());
         $data = $request->validated();
         $this->clients->transfer($client, (int) $data['seller_id'], $data['reason']);
 
@@ -160,12 +175,14 @@ class ClientController extends Controller
 
     private function sellers()
     {
-        return SellerProfile::with('user')->where('status', 'active')->whereJsonContains('capabilities', 'prospecting')->get();
+        return $this->portfolioAccess
+            ->scopeSellers(SellerProfile::query(), request()->user())
+            ->with('user')->where('status', 'active')->whereJsonContains('capabilities', 'prospecting')->get();
     }
 
     private function directoryQuery(Request $request)
     {
-        return Client::query()
+        return $this->portfolioAccess->scopeClients(Client::query(), $request->user())
             ->when($request->filled('search'), fn ($q) => $q->where(fn ($q) => $q->where('full_name', 'like', '%'.$request->search.'%')->orWhere('code', 'like', '%'.$request->search.'%')->orWhere('identity_number', 'like', '%'.$request->search.'%')->orWhere('phone', 'like', '%'.$request->search.'%')))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
             ->when($request->filled('seller'), fn ($q) => $q->whereHas('activeAssignment', fn ($assignment) => $assignment->where('seller_id', $request->integer('seller'))));

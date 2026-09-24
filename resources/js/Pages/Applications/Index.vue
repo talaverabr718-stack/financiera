@@ -6,6 +6,8 @@ import DataTable from '../../components/ui/DataTable.vue';
 import PaginationLinks from '../../components/ui/PaginationLinks.vue';
 import ResourceToolbar from '../../components/ui/ResourceToolbar.vue';
 import { useResourceFilters } from '../../composables/useResourceFilters';
+import { usePermissions } from '../../composables/usePermissions.js';
+const { canManage } = usePermissions();
 const props = defineProps({ applications: Object, board: { type: Object, default: () => ({}) }, filters: Object, endpoints: Object });
 const { filters, clear } = useResourceFilters({ search: props.filters.search ?? '', status: props.filters.status ?? '' }, props.endpoints.index);
 const columns = [{key:'number',label:'Solicitud'},{key:'client',label:'Cliente'},{key:'requested_amount',label:'Monto'},{key:'status',label:'Estado'},{key:'created_at',label:'Fecha'},{key:'actions',label:''}];
@@ -26,7 +28,7 @@ const statusLabels = { draft: 'Borrador', submitted: 'Enviada', review: 'En revi
                 fill-id="applications-trade-fill"
             >
                 <template #actions>
-                    <Link :href="endpoints.create" class="mesa-action" data-tone="emerald">
+                    <Link v-if="canManage('applications')" :href="endpoints.create" class="mesa-action" data-tone="emerald">
                         <strong>Nueva solicitud</strong>
                         <small>Iniciar originación</small>
                     </Link>

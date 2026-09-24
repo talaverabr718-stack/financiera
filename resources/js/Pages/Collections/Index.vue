@@ -5,7 +5,9 @@ import AppLayout from '../../Layouts/AppLayout.vue';
 import PaginationLinks from '../../components/ui/PaginationLinks.vue';
 import BaseModal from '../../components/ui/BaseModal.vue';
 import CollectionReceiptTicket from '../../components/collections/CollectionReceiptTicket.vue';
+import { usePermissions } from '../../composables/usePermissions.js';
 
+const { canManage, canFull } = usePermissions();
 const props = defineProps({
     date: String,
     routes: { type: Array, default: () => [] },
@@ -19,6 +21,9 @@ const props = defineProps({
     lateInstallments: Array,
     selectedRoute: Object,
     storeTemplate: String,
+    correctionTemplate: String,
+    correctionAuthorizationTemplate: String,
+    secondPaymentAuthorizationTemplate: String,
 });
 
 const money = (value, currency = 'NIO') => new Intl.NumberFormat('es-NI', { style: 'currency', currency }).format(Number(value || 0));
@@ -26,7 +31,7 @@ const forms = new Map();
 const dateValue = computed(() => String(props.date || '').slice(0, 10));
 const agendaStops = computed(() => [...(props.selectedRoute?.stops || [])].sort((a, b) => Number(a.position) - Number(b.position)));
 const collectibleLoans = stop => (stop.client?.loans || []).filter(loan => ['active', 'delinquent'].includes(loan.status));
-const pendingCount = route => (route.stops || []).filter(stop => stop.status === 'pending').length;
+const pendingCount = route => Number(route.pending_count ?? (route.stops || []).filter(stop => stop.status === 'pending').length);
 const duesFor = stop => stop.dues || { overdue: [], due_today: [], overdue_total: '0.00', due_today_total: '0.00', total: '0.00' };
 const hasDues = stop => Number(duesFor(stop).total || 0) > 0;
 const moraSuffix = item => Number(item?.mora || 0) > 0 ? ` · mora ${money(item.mora)}` : '';
@@ -49,6 +54,13 @@ const statusClass = status => ({
 }[status] || 'bg-slate-100 text-slate-600');
 
 const managingStop = ref(null);
+const registeringSecondPayment = ref(false);
+const authorizingStop = ref(null);
+const secondPaymentAuthorizationForm = useForm({ reason: '' });
+const authorizingCorrectionRecord = ref(null);
+const correctionAuthorizationForm = useForm({ reason: '' });
+const correctingRecord = ref(null);
+const correctionForm = useForm({ amount: '', reason: '', correction_authorization_id: '' });
 const collectedOpen = ref(false);
 const page = usePage();
 const receiptTicket = ref(null);
@@ -91,6 +103,7 @@ const formFor = stop => {
             reference: '',
             promise_date: '',
             notes: '',
+            additional_payment_authorization_id: '',
         }));
     }
     return forms.get(stop.id);
@@ -98,15 +111,93 @@ const formFor = stop => {
 
 const managementForm = computed(() => managingStop.value ? formFor(managingStop.value) : null);
 
-const openManagement = stop => { managingStop.value = stop; };
+const openManagement = (stop, isSecondPayment = false) => {
+    const form = formFor(stop);
+    registeringSecondPayment.value = isSecondPayment;
+    form.clearErrors();
+    form.outcome = 'collected';
+    form.additional_payment_authorization_id = isSecondPayment
+        ? stop.additional_payment_authorization?.id || ''
+        : '';
+    managingStop.value = stop;
+};
 const closeManagement = () => {
     if (managementForm.value?.processing) return;
     managingStop.value = null;
+    registeringSecondPayment.value = false;
 };
 const submit = stop => formFor(stop).post(props.storeTemplate.replace('__STOP__', stop.id), {
     preserveScroll: true,
-    onSuccess: () => { managingStop.value = null; },
+    onSuccess: () => {
+        managingStop.value = null;
+        registeringSecondPayment.value = false;
+    },
 });
+const openSecondPaymentAuthorization = stop => {
+    authorizingStop.value = stop;
+    secondPaymentAuthorizationForm.clearErrors();
+    secondPaymentAuthorizationForm.reason = '';
+};
+const closeSecondPaymentAuthorization = () => {
+    if (secondPaymentAuthorizationForm.processing) return;
+    authorizingStop.value = null;
+    secondPaymentAuthorizationForm.reset();
+    secondPaymentAuthorizationForm.clearErrors();
+};
+const submitSecondPaymentAuthorization = () => {
+    if (!authorizingStop.value) return;
+    secondPaymentAuthorizationForm.post(props.secondPaymentAuthorizationTemplate.replace('__STOP__', authorizingStop.value.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            authorizingStop.value = null;
+            secondPaymentAuthorizationForm.reset();
+        },
+    });
+};
+const openCorrectionAuthorization = record => {
+    authorizingCorrectionRecord.value = record;
+    correctionAuthorizationForm.clearErrors();
+    correctionAuthorizationForm.reason = '';
+};
+const closeCorrectionAuthorization = () => {
+    if (correctionAuthorizationForm.processing) return;
+    authorizingCorrectionRecord.value = null;
+    correctionAuthorizationForm.reset();
+    correctionAuthorizationForm.clearErrors();
+};
+const submitCorrectionAuthorization = () => {
+    if (!authorizingCorrectionRecord.value) return;
+    correctionAuthorizationForm.post(props.correctionAuthorizationTemplate.replace('__RECORD__', authorizingCorrectionRecord.value.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            authorizingCorrectionRecord.value = null;
+            correctionAuthorizationForm.reset();
+        },
+    });
+};
+const openCorrection = record => {
+    correctingRecord.value = record;
+    correctionForm.clearErrors();
+    correctionForm.amount = String(record.amount || '');
+    correctionForm.reason = '';
+    correctionForm.correction_authorization_id = record.correction_authorization?.id || '';
+};
+const closeCorrection = () => {
+    if (correctionForm.processing) return;
+    correctingRecord.value = null;
+    correctionForm.reset();
+    correctionForm.clearErrors();
+};
+const submitCorrection = () => {
+    if (!correctingRecord.value) return;
+    correctionForm.post(props.correctionTemplate.replace('__RECORD__', correctingRecord.value.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            correctingRecord.value = null;
+            correctionForm.reset();
+        },
+    });
+};
 const changeDate = event => router.get('/cobranza', { date: event.target.value });
 const selectRoute = id => router.get('/cobranza', { date: dateValue.value, agenda_route: id }, { preserveScroll: true });
 </script>
@@ -189,11 +280,24 @@ const selectRoute = id => router.get('/cobranza', { date: dateValue.value, agend
                                     </template>
                                 </div>
 
-                                <div v-if="stop.status === 'pending'" class="agenda-stop-actions">
+                                <div v-if="canManage('collections') && stop.status === 'pending'" class="agenda-stop-actions">
                                     <button type="button" class="btn-primary" @click="openManagement(stop)">Registrar gestión</button>
                                 </div>
-                                <div v-else-if="stop.ticket" class="agenda-stop-actions">
-                                    <button type="button" class="btn-secondary" @click="openTicket(stop.ticket)">Imprimir ticket</button>
+                                <div v-else class="agenda-stop-actions">
+                                    <button v-if="stop.ticket" type="button" class="btn-secondary" @click="openTicket(stop.ticket)">Imprimir ticket</button>
+                                    <button
+                                        v-if="canFull('collections') && stop.can_authorize_second_payment"
+                                        type="button"
+                                        class="btn-secondary"
+                                        @click="openSecondPaymentAuthorization(stop)"
+                                    >Habilitar segundo pago</button>
+                                    <button
+                                        v-if="canManage('collections') && stop.can_register_second_payment"
+                                        type="button"
+                                        class="btn-primary"
+                                        @click="openManagement(stop, true)"
+                                    >Registrar segundo pago</button>
+                                    <span v-if="stop.additional_payment_authorization?.used_at" class="badge bg-indigo-50 text-indigo-700">Segundo pago registrado</span>
                                 </div>
                             </div>
                         </details>
@@ -219,11 +323,23 @@ const selectRoute = id => router.get('/cobranza', { date: dateValue.value, agend
                     <div class="divide-y">
                         <div v-for="record in paymentHistory.data.slice(0, 8)" :key="record.id" class="p-4">
                             <div class="flex justify-between gap-2">
-                                <p class="text-xs font-semibold">{{ record.client.full_name }}</p>
-                                <p class="text-xs font-semibold text-emerald-700">{{ record.amount ? money(record.amount) : record.outcome }}</p>
+                                <div>
+                                    <p class="text-xs font-semibold">{{ record.client.full_name }}</p>
+                                    <div class="mt-1 flex flex-wrap gap-1">
+                                        <span v-if="record.payment?.reversal" class="badge bg-rose-50 text-rose-700">Pago revertido</span>
+                                        <span v-else-if="record.correction_of_id" class="badge bg-indigo-50 text-indigo-700">Monto corregido</span>
+                                    </div>
+                                </div>
+                                <p class="text-xs font-semibold" :class="record.payment?.reversal ? 'text-rose-600 line-through' : 'text-emerald-700'">{{ record.amount ? money(record.amount) : record.outcome }}</p>
                             </div>
                             <p class="mt-1 text-[10px] text-slate-400">{{ record.stop?.route?.name }}</p>
-                            <button v-if="record.ticket" type="button" class="mt-2 text-[10px] font-semibold text-indigo-400 hover:underline" @click="openTicket(record.ticket)">Imprimir ticket</button>
+                            <p v-if="record.correction_reason" class="mt-1 text-[10px] text-slate-500">Motivo: {{ record.correction_reason }}</p>
+                            <div class="mt-2 flex flex-wrap gap-3">
+                                <button v-if="record.ticket" type="button" class="text-[10px] font-semibold text-indigo-400 hover:underline" @click="openTicket(record.ticket)">{{ record.payment?.reversal ? 'Ver recibo anulado' : 'Imprimir ticket' }}</button>
+                                <button v-if="canFull('collections') && record.can_authorize_correction" type="button" class="text-[10px] font-semibold text-indigo-600 hover:underline" @click="openCorrectionAuthorization(record)">Habilitar corrección</button>
+                                <button v-if="canManage('collections') && record.can_correct" type="button" class="text-[10px] font-semibold text-amber-600 hover:underline" @click="openCorrection(record)">Corregir monto</button>
+                                <span v-if="record.correction_authorization && !record.correction_authorization.used_at" class="text-[10px] font-semibold text-indigo-600">Corrección habilitada</span>
+                            </div>
                         </div>
                     </div>
                     <PaginationLinks :links="paymentHistory.links"/>
@@ -257,7 +373,7 @@ const selectRoute = id => router.get('/cobranza', { date: dateValue.value, agend
 
         <BaseModal
             :open="Boolean(managingStop)"
-            title="Registrar gestión"
+            :title="registeringSecondPayment ? 'Registrar segundo pago' : 'Registrar gestión'"
             :description="managingStop ? `${managingStop.client.full_name} · ${selectedRoute?.name || ''}` : ''"
             size="collection-modal"
             @close="closeManagement"
@@ -268,7 +384,10 @@ const selectRoute = id => router.get('/cobranza', { date: dateValue.value, agend
                     <p v-for="item in duesFor(managingStop).due_today" :key="`today-${item.id}`" class="text-[11px] text-slate-500">Cuota {{ item.number }} · vence hoy · {{ money(item.outstanding) }}{{ moraSuffix(item) }}</p>
                     <p v-for="item in duesFor(managingStop).overdue" :key="`overdue-${item.id}`" class="text-[11px] text-rose-600">Cuota {{ item.number }} · {{ item.days }} {{ item.days === 1 ? 'día' : 'días' }} · {{ money(item.outstanding) }}{{ moraSuffix(item) }}</p>
                 </div>
-                <label class="field-label">Resultado
+                <div v-if="registeringSecondPayment" class="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-800">
+                    Autorizado por {{ managingStop.additional_payment_authorization?.authorizer?.name || 'administración' }}. Este permiso se utilizará una sola vez.
+                </div>
+                <label v-else class="field-label">Resultado
                     <select v-model="managementForm.outcome" class="control">
                         <option value="collected">Cobrado</option>
                         <option value="promise">Promesa</option>
@@ -298,14 +417,90 @@ const selectRoute = id => router.get('/cobranza', { date: dateValue.value, agend
             <template #footer>
                 <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                     <button type="button" class="btn-secondary w-full sm:w-auto" :disabled="managementForm?.processing" @click="closeManagement">Cancelar</button>
-                    <button type="submit" form="collection-management-form" class="btn-primary w-full sm:w-auto" :disabled="managementForm?.processing">{{ managementForm?.processing ? 'Registrando…' : 'Registrar gestión' }}</button>
+                    <button type="submit" form="collection-management-form" class="btn-primary w-full sm:w-auto" :disabled="managementForm?.processing">{{ managementForm?.processing ? 'Registrando…' : (registeringSecondPayment ? 'Registrar segundo pago' : 'Registrar gestión') }}</button>
+                </div>
+            </template>
+        </BaseModal>
+
+        <BaseModal
+            :open="Boolean(authorizingStop)"
+            title="Habilitar segundo pago"
+            :description="authorizingStop ? `${authorizingStop.client.full_name} · permiso de un solo uso` : ''"
+            size="collection-modal"
+            @close="closeSecondPaymentAuthorization"
+        >
+            <form v-if="authorizingStop" id="second-payment-authorization-form" class="grid gap-3" @submit.prevent="submitSecondPaymentAuthorization">
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                    El gestor podrá registrar un segundo pago para esta visita únicamente hoy. La autorización, el administrador y el pago quedarán auditados.
+                </div>
+                <label class="field-label">Motivo de la autorización
+                    <textarea v-model="secondPaymentAuthorizationForm.reason" class="control min-h-24" maxlength="500" required placeholder="Ejemplo: el cliente entregará un segundo abono durante el día"></textarea>
+                </label>
+                <p v-if="Object.keys(secondPaymentAuthorizationForm.errors).length" class="text-xs text-rose-600">{{ Object.values(secondPaymentAuthorizationForm.errors).join(' · ') }}</p>
+            </form>
+            <template #footer>
+                <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" class="btn-secondary w-full sm:w-auto" :disabled="secondPaymentAuthorizationForm.processing" @click="closeSecondPaymentAuthorization">Cancelar</button>
+                    <button type="submit" form="second-payment-authorization-form" class="btn-primary w-full sm:w-auto" :disabled="secondPaymentAuthorizationForm.processing">{{ secondPaymentAuthorizationForm.processing ? 'Habilitando…' : 'Habilitar segundo pago' }}</button>
+                </div>
+            </template>
+        </BaseModal>
+        <BaseModal
+            :open="Boolean(authorizingCorrectionRecord)"
+            title="Habilitar corrección de monto"
+            :description="authorizingCorrectionRecord ? `${authorizingCorrectionRecord.client.full_name} · permiso de un solo uso` : ''"
+            size="collection-modal"
+            @close="closeCorrectionAuthorization"
+        >
+            <form v-if="authorizingCorrectionRecord" id="collection-correction-authorization-form" class="grid gap-3" @submit.prevent="submitCorrectionAuthorization">
+                <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-800">
+                    El gestor podrá corregir este pago una sola vez. Se registrarán el administrador que autoriza, el motivo y quien aplica la corrección.
+                </div>
+                <label class="field-label">Motivo de la autorización
+                    <textarea v-model="correctionAuthorizationForm.reason" class="control min-h-24" maxlength="500" required placeholder="Ejemplo: se confirmó que el efectivo recibido fue mayor al monto digitado"></textarea>
+                </label>
+                <p v-if="Object.keys(correctionAuthorizationForm.errors).length" class="text-xs text-rose-600">{{ Object.values(correctionAuthorizationForm.errors).join(' · ') }}</p>
+            </form>
+            <template #footer>
+                <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" class="btn-secondary w-full sm:w-auto" :disabled="correctionAuthorizationForm.processing" @click="closeCorrectionAuthorization">Cancelar</button>
+                    <button type="submit" form="collection-correction-authorization-form" class="btn-primary w-full sm:w-auto" :disabled="correctionAuthorizationForm.processing">{{ correctionAuthorizationForm.processing ? 'Habilitando…' : 'Habilitar corrección' }}</button>
+                </div>
+            </template>
+        </BaseModal>
+        <BaseModal
+            :open="Boolean(correctingRecord)"
+            title="Corregir monto del pago"
+            :description="correctingRecord ? `${correctingRecord.client.full_name} · ${money(correctingRecord.amount)}` : ''"
+            size="collection-modal"
+            @close="closeCorrection"
+        >
+            <form v-if="correctingRecord" id="collection-correction-form" class="grid gap-3" @submit.prevent="submitCorrection">
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                    Esta corrección fue habilitada por {{ correctingRecord?.correction_authorization?.authorizer?.name || 'administración' }}. El pago anterior será revertido y se emitirá un recibo nuevo; ambos movimientos quedarán auditados.
+                </div>
+                <label class="field-label">Monto registrado
+                    <input :value="money(correctingRecord.amount)" class="control bg-slate-50" disabled>
+                </label>
+                <label class="field-label">Monto total correcto
+                    <input v-model="correctionForm.amount" type="number" min=".01" step=".01" class="control" required>
+                </label>
+                <label class="field-label">Motivo de la corrección
+                    <textarea v-model="correctionForm.reason" class="control min-h-24" maxlength="500" required placeholder="Ejemplo: el gestor digitó un monto menor al efectivo recibido"></textarea>
+                </label>
+                <p v-if="Object.keys(correctionForm.errors).length" class="text-xs text-rose-600">{{ Object.values(correctionForm.errors).join(' · ') }}</p>
+            </form>
+            <template #footer>
+                <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" class="btn-secondary w-full sm:w-auto" :disabled="correctionForm.processing" @click="closeCorrection">Cancelar</button>
+                    <button type="submit" form="collection-correction-form" class="btn-primary w-full sm:w-auto" :disabled="correctionForm.processing">{{ correctionForm.processing ? 'Corrigiendo…' : 'Confirmar corrección' }}</button>
                 </div>
             </template>
         </BaseModal>
 
         <BaseModal
             :open="Boolean(receiptTicket)"
-            title="Pago registrado"
+            :title="receiptTicket?.status === 'reversed' ? 'Pago anulado' : 'Pago registrado'"
             :description="receiptTicket ? `${receiptTicket.receipt_number} · ${receiptTicket.client || ''}` : ''"
             size="collection-modal"
             @close="closeTicket"

@@ -9,7 +9,7 @@ import ScheduleTable from '../../components/amortization/ScheduleTable.vue';
 import SummaryDashboard from '../../components/amortization/SummaryDashboard.vue';
 import AppLayout from '../../Layouts/AppLayout.vue';
 
-const props = defineProps({ input: Object, methods: Object, frequencies: Object, calculateUrl: String });
+const props = defineProps({ input: Object, frequencies: Object, calculateUrl: String });
 const form = reactive({ ...props.input });
 const result = ref(null);
 const loading = ref(false);
@@ -21,7 +21,12 @@ const filters = reactive({ search: '', from: null, to: null, perPage: 25 });
 let timer;
 let requestController;
 
-const valid = computed(() => Number(form.principal) > 0 && Number(form.annual_rate) >= 0 && Number(form.periods) > 0 && form.first_payment_date);
+const valid = computed(() => {
+    const base = Number(form.principal) > 0 && Number(form.annual_rate) >= 0 && form.first_payment_date;
+    return form.method === 'monthly_flat'
+        ? base && Number(form.term_months) > 0 && ['weekly', 'biweekly', 'monthly'].includes(form.frequency)
+        : base && Number(form.periods) > 0;
+});
 const filteredRows = computed(() => (result.value?.rows || []).filter(row => {
     const term = filters.search.trim().toLowerCase();
     return (!term || String(row.number).includes(term) || date(row.date).includes(term)) && (!filters.from || row.number >= filters.from) && (!filters.to || row.number <= filters.to);
@@ -71,14 +76,14 @@ onBeforeUnmount(() => { clearTimeout(timer); requestController?.abort(); window.
     <Head title="Calculadora de amortización" />
     <AppLayout title="Calculadora de amortización" eyebrow="Simulador financiero" description="Actualizaciones instantáneas con validación segura en Laravel.">
         <div class="grid gap-4 xl:grid-cols-[310px_minmax(0,1fr)]">
-                    <aside class="card h-fit overflow-hidden xl:sticky xl:top-20"><div class="border-b bg-gradient-to-r from-indigo-50 to-cyan-50 px-4 py-3"><p class="text-[10px] font-bold uppercase tracking-widest text-indigo-600">Parámetros</p><p class="mt-1 text-[11px] text-slate-500">Cálculo seguro procesado por Laravel.</p></div><CalculatorForm :form="form" :methods="methods" :frequencies="frequencies" :errors="errors" :loading="loading" :valid="valid" @calculate="calculate" /></aside>
+                    <aside class="card h-fit overflow-hidden xl:sticky xl:top-20"><div class="border-b bg-gradient-to-r from-indigo-50 to-cyan-50 px-4 py-3"><p class="text-[10px] font-bold uppercase tracking-widest text-indigo-600">Parámetros</p><p class="mt-1 text-[11px] text-slate-500">Cálculo seguro procesado por Laravel.</p></div><CalculatorForm :form="form" :frequencies="frequencies" :errors="errors" :loading="loading" :valid="valid" @calculate="calculate" /></aside>
 
                     <section class="min-w-0 space-y-3" aria-live="polite">
                         <template v-if="result">
                             <SummaryDashboard :result="result" :currency="currency" />
-                            <article class="card overflow-hidden"><div class="flex items-center justify-between border-b px-4 py-3"><div><h2 class="text-sm font-bold">Plan de pagos</h2><p class="text-[10px] text-slate-400">Tasa periódica {{ result.periodic_rate }}% · selecciona una fila para ver detalles</p></div><button class="btn-secondary" @click="printPage">Imprimir</button></div><ScheduleFilters :filters="filters" :total="result.rows.length" :visible="filteredRows.length" @export="exportCsv" /><ScheduleTable :rows="paginatedRows" :page="currentPage" :pages="pages" :currency="currency" :date="date" @select="selected = $event" @page="currentPage = $event" /></article>
+                            <article class="card overflow-hidden"><div class="flex items-center justify-between border-b px-4 py-3"><div><h2 class="text-sm font-bold">Plan de pagos</h2><p class="text-[10px] text-slate-400">{{ result.rate_label }} {{ result.periodic_rate }}% · Total aplicado {{ result.total_rate }}% · {{ result.periods }} cuotas</p></div><button class="btn-secondary" @click="printPage">Imprimir</button></div><ScheduleFilters :filters="filters" :total="result.rows.length" :visible="filteredRows.length" @export="exportCsv" /><ScheduleTable :rows="paginatedRows" :page="currentPage" :pages="pages" :currency="currency" :date="date" @select="selected = $event" @page="currentPage = $event" /></article>
                         </template>
-                        <div v-else class="card grid min-h-[520px] place-items-center p-8 text-center"><div class="max-w-md"><div class="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-400 text-2xl font-black text-white shadow-xl shadow-indigo-200">%</div><h2 class="mt-5 text-xl font-bold">Construye una proyección clara</h2><p class="mt-2 text-sm leading-6 text-slate-500">Configura el monto, tasa y plazos. Obtendrás indicadores, tabla filtrable, paginación, exportación y detalle por cuota.</p><div class="mt-5 flex justify-center gap-2 text-[10px] font-semibold text-slate-400"><span class="rounded-full bg-slate-100 px-3 py-1">Sin persistencia</span><span class="rounded-full bg-slate-100 px-3 py-1">Validación backend</span><span class="rounded-full bg-slate-100 px-3 py-1">Vue 3</span></div></div></div>
+                        <div v-else class="card grid min-h-[520px] place-items-center p-8 text-center"><div class="max-w-md"><div class="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-400 text-2xl font-black text-white shadow-xl shadow-indigo-200">%</div><h2 class="mt-5 text-xl font-bold">Construye una proyección clara</h2><p class="mt-2 text-sm leading-6 text-slate-500">Ingresa monto, tasa mensual y meses. La calculadora obtiene automáticamente las cuotas semanales o quincenales y genera el plan completo.</p></div></div>
                     </section>
         </div>
         <InstallmentModal :row="selected" :currency="currency" :date="date" @close="selected = null" />

@@ -1518,11 +1518,24 @@ button.mesa-action { cursor:pointer; text-align:left; font:inherit; color:inheri
 .client-show-pulse { position:relative; z-index:2; display:flex; flex-direction:column; gap:.75rem; }
 .client-show-pulse .mesa-pulse { justify-content:flex-start; min-height:0; }
 .client-show-pulse-copy { margin:.55rem 0 0; color:var(--mesa-muted); font-size:.72rem; line-height:1.45; }
+@media (max-width:1280px) {
+    .clients-mesa.client-show-mesa .mesa-briefing {
+        grid-template-columns:minmax(0,1fr);
+        grid-template-areas:"copy" "pulse" "actions";
+    }
+    .client-show-pulse { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .client-show-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
 @media (max-width:960px) {
-    .client-show-mesa .mesa-briefing { grid-template-columns:1fr; }
+    .client-show-mesa .mesa-briefing {
+        grid-template-columns:minmax(0,1fr);
+        grid-template-areas:"copy" "pulse" "actions";
+    }
+    .client-show-pulse { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
     .client-show-facts { grid-template-columns:repeat(2, minmax(0,1fr)); }
 }
 @media (max-width:640px) {
+    .client-show-pulse { grid-template-columns:minmax(0,1fr); }
     .client-show-facts { grid-template-columns:1fr; }
     .client-show-actions { flex-direction:column; }
     .client-show-actions .mesa-action { width:100%; }
@@ -1972,6 +1985,7 @@ html.theme-day .agenda-route.is-active { background: #eff6ff; border-color: #1d4
 .collection-ticket-brand strong { font-size: .85rem; }
 .collection-ticket-brand small { color: #64748b; letter-spacing: .08em; text-transform: uppercase; font-size: .58rem; font-weight: 700; }
 .collection-ticket-number { margin-top: .65rem; text-align: center; font-weight: 800; font-size: .92rem; }
+.collection-ticket-void { margin: .35rem 0; border: 2px solid #be123c; color: #be123c; padding: .3rem; text-align: center; font-size: .72rem; font-weight: 900; letter-spacing: .08em; }
 .collection-ticket-meta { text-align: center; color: #64748b; margin-bottom: .7rem; }
 .collection-ticket dl { display: grid; gap: .28rem; margin-bottom: .7rem; }
 .collection-ticket dl div { display: flex; justify-content: space-between; gap: .75rem; }

@@ -3,7 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Client;
-use App\Models\CreditApplication;
+use App\Services\SimpleInterestProjectionService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -19,17 +19,6 @@ class CreditApplicationRequest extends FormRequest
         if (! $this->filled('applied_on')) {
             $this->merge(['applied_on' => today()->toDateString()]);
         }
-
-        $amount = $this->input('requested_amount');
-        $installment = $this->input('installment_amount');
-        if ($amount === null || $installment === null || ! is_numeric($amount) || ! is_numeric($installment)) {
-            return;
-        }
-
-        $term = CreditApplication::paymentCountFromInstallment((string) $amount, (string) $installment);
-        if ($term > 0) {
-            $this->merge(['term' => $term]);
-        }
     }
 
     public function rules(): array
@@ -41,9 +30,12 @@ class CreditApplicationRequest extends FormRequest
             'requested_amount' => ['required', 'decimal:0,2', 'gt:0'], 'approved_amount' => ['nullable', 'decimal:0,2', 'gt:0'],
             'currency' => ['required', Rule::in(['NIO', 'USD'])], 'purpose' => ['required', 'string', 'max:1000'],
             'applied_on' => ['required', 'date', 'before_or_equal:today'],
-            'installment_amount' => ['required_without:term', 'nullable', 'decimal:0,2', 'gt:0'],
-            'term' => ['required', 'integer', 'min:1', 'max:365'], 'payment_frequency' => ['required', Rule::in(['daily', 'weekly', 'biweekly', 'monthly'])],
-            'interest_rate' => ['nullable', 'decimal:0,6', 'min:0'], 'interest_method' => ['nullable', Rule::in(['flat', 'declining_balance', 'french'])],
+            'installment_amount' => ['nullable', 'decimal:0,2', 'gt:0'],
+            'term' => ['nullable', 'integer', 'min:1', 'max:'.SimpleInterestProjectionService::MAX_PAYMENTS],
+            'term_value' => ['required', 'integer', 'min:1', 'max:365'],
+            'term_unit' => ['required', Rule::in(array_keys(SimpleInterestProjectionService::TERM_UNITS))],
+            'payment_frequency' => ['required', Rule::in(SimpleInterestProjectionService::PAYMENT_FREQUENCIES)],
+            'interest_rate' => ['required', 'decimal:0,6', 'min:0'], 'interest_method' => ['nullable', Rule::in(['flat', 'declining_balance', 'french'])],
             'proposed_first_payment_date' => ['nullable', 'date'], 'administrative_fee' => ['nullable', 'decimal:0,2', 'min:0'],
             'seller_notes' => ['nullable', 'string', 'max:2000'], 'analyst_notes' => ['nullable', 'string', 'max:2000'],
             'status' => ['required', Rule::in(['draft', 'submitted', 'review'])], 'requires_guarantor' => ['sometimes', 'boolean'],
@@ -69,9 +61,10 @@ class CreditApplicationRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'installment_amount.required_without' => 'Indica el monto de cada cuota para calcular cuántos pagos serán.',
-            'term.required' => 'Indica el monto de cada cuota para calcular cuántos pagos serán.',
-            'term.max' => 'Aumenta el monto de cada cuota. El crédito no puede superar 365 pagos.',
+            'term_value.required' => 'Indica la duración del plazo.',
+            'term_unit.required' => 'Selecciona si el plazo está expresado en días, semanas, meses o años.',
+            'interest_rate.required' => 'Indica la tasa de interés por período.',
+            'term.max' => 'El plazo no puede superar 365 pagos.',
         ];
     }
 
@@ -83,7 +76,7 @@ class CreditApplicationRequest extends FormRequest
             if ($clientId && $clientId !== $currentClientId) {
                 $client = Client::query()->find($clientId);
                 if ($client && ! $client->canOriginateNewCredit()) {
-                    $validator->errors()->add('client_id', 'Este cliente tiene un crédito vigente. Cancélalo antes de registrar una nueva solicitud.');
+                    $validator->errors()->add('client_id', 'Este cliente tiene un crédito activo o en mora. Debe finalizarlo antes de registrar una nueva solicitud.');
                 }
             }
             if ($this->boolean('requires_guarantor') && empty(array_filter($this->input('guarantors', []), fn ($row) => ! empty($row['guarantor_id']) || ! empty($row['full_name'])))) {

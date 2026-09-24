@@ -4,7 +4,9 @@ import { Link, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '../../Layouts/AppLayout.vue';
 import GoogleServiceMap from '../../components/dashboard/GoogleServiceMap.vue';
 import MesaModuleBoard from '../../components/mesa/MesaModuleBoard.vue';
+import { usePermissions } from '../../composables/usePermissions.js';
 
+const { canManage } = usePermissions();
 const props = defineProps({
     routes: Array,
     openRoutes: Array,
@@ -65,7 +67,7 @@ const mapPins = computed(() => (props.selectedRoute?.stops || [])
                             <input type="date" :value="String(date).slice(0, 10)" class="mesa-date" @change="router.get(endpoints.index, { date: $event.target.value })">
                         </small>
                     </label>
-                    <Link :href="endpoints.create" class="mesa-action" data-tone="emerald">
+                    <Link v-if="canManage('routes')" :href="endpoints.create" class="mesa-action" data-tone="emerald">
                         <strong>Nueva ruta</strong>
                         <small>Programar jornada</small>
                     </Link>
@@ -94,7 +96,7 @@ const mapPins = computed(() => (props.selectedRoute?.stops || [])
                                 <h2 class="mt-2 text-lg font-semibold">{{ selectedRoute.name }}</h2>
                                 <p class="text-xs text-slate-300">{{ selectedRoute.code }} · {{ selectedRoute.collector.display_name }}</p>
                             </div>
-                            <form class="flex gap-2" @submit.prevent="saveStatus">
+                            <form v-if="canManage('routes')" class="flex gap-2" @submit.prevent="saveStatus">
                                 <select v-model="status.status" class="rounded-lg bg-white px-3 text-xs text-slate-800">
                                     <option value="planned">Programada</option>
                                     <option value="active">En recorrido</option>
@@ -116,7 +118,7 @@ const mapPins = computed(() => (props.selectedRoute?.stops || [])
                     <section class="card overflow-hidden">
                         <div class="section-heading flex justify-between">
                             <h2 class="font-semibold">Clientes</h2>
-                            <a :href="`/rutas/${selectedRoute.id}/editar`" class="text-xs font-semibold text-blue-700">Editar ruta</a>
+                            <a v-if="canManage('routes')" :href="`/rutas/${selectedRoute.id}/editar`" class="text-xs font-semibold text-blue-700">Editar ruta</a>
                         </div>
                         <div class="divide-y">
                             <div v-for="stop in selectedRoute.stops" :key="stop.id" class="p-4">
@@ -127,7 +129,7 @@ const mapPins = computed(() => (props.selectedRoute?.stops || [])
                                         <p class="truncate text-[10px] text-slate-400">{{ stop.client.address }}</p>
                                     </div>
                                     <span class="badge shrink-0 whitespace-nowrap" :class="stop.status === 'visited' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'">{{ statusLabel(stop.status) }}<template v-if="visitStamp(stop)"> · {{ visitStamp(stop) }}</template></span>
-                                    <button v-if="stop.status === 'pending'" type="button" class="btn-soft" @click="visit(stop)">Marcar visita</button>
+                                    <button v-if="canManage('routes') && stop.status === 'pending'" type="button" class="btn-soft" @click="visit(stop)">Marcar visita</button>
                                 </div>
                                 <div class="agenda-dues">
                                     <p v-if="!hasDues(stop)" class="agenda-dues-empty">Sin cuotas vencidas ni cuota con vencimiento en esta fecha.</p>

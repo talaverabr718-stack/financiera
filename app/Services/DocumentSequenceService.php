@@ -20,6 +20,7 @@ class DocumentSequenceService
                 'loan' => ['loans', 'number'],
                 'loan_disbursement' => ['loan_disbursements', 'number'],
                 'payment' => ['payments', 'receipt_number'],
+                'payment_reversal' => ['payment_reversals', 'number'],
                 'journal_entry' => ['journal_entries', 'number'],
                 'delinquency_case' => ['delinquency_cases', 'code'],
                 'collection_route' => ['collection_routes', 'code'],

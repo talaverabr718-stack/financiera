@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\SellerProfile;
 use App\Models\SystemSetting;
 use App\Services\FinancialReportService;
+use App\Services\PortfolioAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -13,7 +14,10 @@ use Inertia\Inertia;
 
 class ReportController extends Controller
 {
-    public function __construct(private FinancialReportService $reports) {}
+    public function __construct(
+        private FinancialReportService $reports,
+        private PortfolioAccessService $portfolioAccess,
+    ) {}
 
     public function index(Request $request)
     {
@@ -28,8 +32,8 @@ class ReportController extends Controller
         $optionRequest->query->remove('status');
         $statusOptions = $this->reports->statusOptions($type, $this->reports->query($type, $from, $to, $optionRequest));
         $data = $query->latest($this->dateColumn($type))->paginate(30)->withQueryString();
-        $clients = Client::orderBy('full_name')->get(['id', 'full_name']);
-        $sellers = SellerProfile::with('user')->where('status', 'active')->get();
+        $clients = $this->portfolioAccess->scopeClients(Client::query(), $request->user())->orderBy('full_name')->get(['id', 'full_name']);
+        $sellers = $this->portfolioAccess->scopeSellers(SellerProfile::query(), $request->user())->with('user')->where('status', 'active')->get();
 
         return Inertia::render('Reports/Index', compact('type','from','to','summary','analytics','statusOptions','data','clients','sellers') + [
             'types' => FinancialReportService::TYPES,

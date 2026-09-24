@@ -17,6 +17,15 @@ use Throwable;
 
 class DelinquencyTrackingService
 {
+    public const METHOD_DAILY_PERCENTAGE = 'daily_percentage';
+
+    public const METHOD_FIXED = 'fixed';
+
+    public const MONETARY_METHODS = [
+        self::METHOD_DAILY_PERCENTAGE => 'Porcentaje diario',
+        self::METHOD_FIXED => 'Cargo fijo por cuota vencida',
+    ];
+
     public function __construct(
         private DocumentSequenceService $sequences,
         private AuditService $audit,
@@ -58,9 +67,11 @@ class DelinquencyTrackingService
             'as_of' => $asOf,
             'timezone' => config('app.timezone'),
             'oldest_due_on' => $oldest ? $this->calendarDate($oldest->due_date) : null,
+            'method' => $loan->delinquency_method ?: ($loan->delinquency_daily_rate !== null ? self::METHOD_DAILY_PERCENTAGE : null),
             'daily_rate' => $loan->delinquency_daily_rate,
+            'fixed_amount' => $loan->delinquency_fixed_amount,
             'total_mora' => (string) $loan->delinquency_balance,
-            'monetary_delinquency_enabled' => filled($loan->delinquency_daily_rate) || filled(config('financial.delinquency_method')),
+            'monetary_delinquency_enabled' => filled($loan->delinquency_method) || filled($loan->delinquency_daily_rate),
             'installments' => $overdue->map(fn (LoanInstallment $installment) => $this->explainInstallment($installment, $asOf, $loan)),
             'ledger' => $loan->installments->sortBy('number')->values()->map(fn (LoanInstallment $installment) => $this->explainInstallment($installment, $asOf, $loan)),
             'paid_history' => $this->paidHistory($loan),
@@ -74,6 +85,7 @@ class DelinquencyTrackingService
         $loan ??= $installment->loan;
         $history = $this->installmentHistory($installment, $due);
         $outstanding = $installment->outstandingAmount();
+        $scheduledOutstanding = $installment->scheduledOutstandingAmount();
         $paid = $installment->amountPaid();
         $paidInFull = bccomp($outstanding, '0.00', 2) === 0 && bccomp($paid, '0.00', 2) === 1;
         $lastActive = $history->filter(fn (array $row) => $row['status'] !== 'reversed')->last();
@@ -96,8 +108,11 @@ class DelinquencyTrackingService
             'fees_paid' => (string) $installment->fees_paid,
             'delinquency_paid' => (string) $installment->delinquency_paid,
             'amount_due' => $installment->amountDue(),
+            'installment_amount' => $installment->scheduledAmountDue(),
             'amount_paid' => $paid,
             'outstanding_amount' => $outstanding,
+            'overdue_balance' => $daysOverdue > 0 ? $scheduledOutstanding : '0.00',
+            'total_to_pay' => $outstanding,
             'is_overdue' => $installment->isOverdueOn($asOf),
             'days_overdue' => $daysOverdue,
             'mora_label' => $daysOverdue > 0 ? $daysOverdue.' '.($daysOverdue === 1 ? 'día' : 'días') : '—',
@@ -187,9 +202,9 @@ class DelinquencyTrackingService
 
         return DB::transaction(function () use ($loan, $asOf, $trigger, $actorId, $context) {
             $loan = Loan::query()->with('installments')->lockForUpdate()->findOrFail($loan->id);
-            $rate = $this->resolveDailyRate($loan, $context);
-            if ($rate !== null) {
-                $this->applyDailyPercentageCharges($loan, $asOf, $rate, $actorId);
+            $policy = $this->resolveChargePolicy($loan, $context);
+            if ($policy !== null) {
+                $this->applyMonetaryCharges($loan, $asOf, $policy, $actorId);
                 $loan->unsetRelation('installments');
                 $loan->load('installments');
             }
@@ -415,23 +430,62 @@ class DelinquencyTrackingService
         ];
     }
 
-    private function resolveDailyRate(Loan $loan, array $context): ?string
+    /**
+     * @return array{method: string, value: string}|null
+     */
+    private function resolveChargePolicy(Loan $loan, array $context): ?array
     {
-        if (array_key_exists('daily_rate', $context) && $context['daily_rate'] !== null && $context['daily_rate'] !== '') {
-            $rate = number_format((float) $context['daily_rate'], 6, '.', '');
-            $loan->update(['delinquency_daily_rate' => $rate]);
-
-            return $rate;
+        $requestedMethod = $context['method'] ?? null;
+        if ($requestedMethod === null && array_key_exists('daily_rate', $context) && $context['daily_rate'] !== null && $context['daily_rate'] !== '') {
+            $requestedMethod = self::METHOD_DAILY_PERCENTAGE;
         }
 
-        if ($loan->delinquency_daily_rate === null) {
-            return null;
+        if ($requestedMethod === self::METHOD_DAILY_PERCENTAGE) {
+            $rate = number_format((float) ($context['daily_rate'] ?? 0), 6, '.', '');
+            $loan->update([
+                'delinquency_method' => self::METHOD_DAILY_PERCENTAGE,
+                'delinquency_daily_rate' => $rate,
+                'delinquency_fixed_amount' => null,
+            ]);
+
+            return ['method' => self::METHOD_DAILY_PERCENTAGE, 'value' => $rate];
         }
 
-        return number_format((float) $loan->delinquency_daily_rate, 6, '.', '');
+        if ($requestedMethod === self::METHOD_FIXED) {
+            $amount = number_format((float) ($context['fixed_amount'] ?? 0), 2, '.', '');
+            $loan->update([
+                'delinquency_method' => self::METHOD_FIXED,
+                'delinquency_daily_rate' => null,
+                'delinquency_fixed_amount' => $amount,
+            ]);
+
+            return ['method' => self::METHOD_FIXED, 'value' => $amount];
+        }
+
+        $storedMethod = $loan->delinquency_method
+            ?: ($loan->delinquency_daily_rate !== null ? self::METHOD_DAILY_PERCENTAGE : null);
+
+        if ($storedMethod === self::METHOD_DAILY_PERCENTAGE && $loan->delinquency_daily_rate !== null) {
+            return [
+                'method' => self::METHOD_DAILY_PERCENTAGE,
+                'value' => number_format((float) $loan->delinquency_daily_rate, 6, '.', ''),
+            ];
+        }
+
+        if ($storedMethod === self::METHOD_FIXED && $loan->delinquency_fixed_amount !== null) {
+            return [
+                'method' => self::METHOD_FIXED,
+                'value' => number_format((float) $loan->delinquency_fixed_amount, 2, '.', ''),
+            ];
+        }
+
+        return null;
     }
 
-    private function applyDailyPercentageCharges(Loan $loan, CarbonImmutable $asOf, string $dailyRate, ?int $actorId): void
+    /**
+     * @param  array{method: string, value: string}  $policy
+     */
+    private function applyMonetaryCharges(Loan $loan, CarbonImmutable $asOf, array $policy, ?int $actorId): void
     {
         foreach ($loan->installments as $installment) {
             if ($installment->isExcludedFromCollection()) {
@@ -440,7 +494,9 @@ class DelinquencyTrackingService
 
             $days = $installment->daysOverdueOn($asOf);
             $base = $this->moraBaseAmount($installment);
-            $charge = $this->dailyPercentageCharge($base, $dailyRate, $days);
+            $charge = $policy['method'] === self::METHOD_FIXED
+                ? $this->fixedCharge($base, $policy['value'], $days)
+                : $this->dailyPercentageCharge($base, $policy['value'], $days);
 
             if (bccomp($base, '0.00', 2) !== 1 && $days > 0) {
                 $charge = (string) $installment->delinquency_due;
@@ -456,7 +512,17 @@ class DelinquencyTrackingService
             }
 
             if ($actorId && $days > 0 && bccomp($charge, '0.00', 2) === 1) {
-                $this->recordAccrual($loan, $installment, $asOf, $base, $dailyRate, $days, $charge, $actorId);
+                $this->recordAccrual(
+                    $loan,
+                    $installment,
+                    $asOf,
+                    $base,
+                    $policy['method'],
+                    $policy['value'],
+                    $days,
+                    $charge,
+                    $actorId,
+                );
             }
         }
 
@@ -492,12 +558,22 @@ class DelinquencyTrackingService
         return bcmul(bcmul($base, $factor, 8), (string) $days, 2);
     }
 
+    private function fixedCharge(string $base, string $fixedAmount, int $days): string
+    {
+        if ($days < 1 || bccomp($base, '0.00', 2) !== 1) {
+            return '0.00';
+        }
+
+        return bcadd($fixedAmount, '0.00', 2);
+    }
+
     private function recordAccrual(
         Loan $loan,
         LoanInstallment $installment,
         CarbonImmutable $asOf,
         string $base,
-        string $dailyRate,
+        string $method,
+        string $policyValue,
         int $days,
         string $amount,
         int $actorId,
@@ -510,9 +586,10 @@ class DelinquencyTrackingService
             ->first();
 
         if ($current
+            && $current->method === $method
             && bccomp((string) $current->amount, $amount, 2) === 0
-            && bccomp((string) $current->rate, $dailyRate, 6) === 0
-            && (int) $current->days_overdue === $days
+            && bccomp((string) $current->rate, $policyValue, 6) === 0
+            && ($method === self::METHOD_FIXED || (int) $current->days_overdue === $days)
         ) {
             return;
         }
@@ -535,20 +612,21 @@ class DelinquencyTrackingService
             ]);
         }
 
+        $policySnapshot = $method === self::METHOD_FIXED
+            ? ['formula' => 'cargo_fijo_por_cuota_vencida', 'fixed_amount' => $policyValue]
+            : ['formula' => 'saldo_cuota × (% / 100) × días', 'daily_rate' => $policyValue];
+
         DelinquencyAccrual::create([
             'idempotency_key' => (string) Str::uuid(),
             'loan_id' => $loan->id,
             'installment_id' => $installment->id,
             'accrual_date' => $asOf->toDateString(),
             'base_amount' => $base,
-            'rate' => $dailyRate,
-            'method' => 'daily_percentage',
+            'rate' => $policyValue,
+            'method' => $method,
             'days_overdue' => $days,
             'amount' => $amount,
-            'policy_snapshot' => [
-                'formula' => 'saldo_cuota × (% / 100) × días',
-                'daily_rate' => $dailyRate,
-            ],
+            'policy_snapshot' => $policySnapshot,
             'status' => 'posted',
             'created_by' => $actorId,
         ]);

@@ -3,7 +3,9 @@ import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import InstallmentLedger from '../../components/loans/InstallmentLedger.vue';
 import AppLayout from '../../Layouts/AppLayout.vue';
+import { usePermissions } from '../../composables/usePermissions.js';
 
+const { canManage, canFull } = usePermissions();
 const props = defineProps({ client: Object, timeline: Array, cycles: { type: Array, default: () => [] }, delinquency: Object, sellers: Array, endpoints: Object });
 const transfer = useForm({ seller_id: props.sellers[0]?.id ?? '', reason: '' });
 const money = value => new Intl.NumberFormat('es-NI', { minimumFractionDigits: 2 }).format(Number(value || 0));
@@ -68,15 +70,15 @@ const submitTransfer = () => transfer.post(props.endpoints.transfer, { preserveS
                 </aside>
                 <div class="mesa-actions client-show-actions">
                     <div class="client-show-actions-main">
-                        <a :href="endpoints.create_application" class="mesa-action" data-tone="emerald">
+                        <a v-if="canManage('applications')" :href="endpoints.create_application" class="mesa-action" data-tone="emerald">
                             <strong>Nueva solicitud</strong>
                             <small>Iniciar crédito</small>
                         </a>
-                        <a :href="endpoints.edit" class="mesa-action" data-tone="blue">
+                        <a v-if="canManage('clients')" :href="endpoints.edit" class="mesa-action" data-tone="blue">
                             <strong>Editar</strong>
                             <small>Actualizar expediente</small>
                         </a>
-                        <button type="button" class="mesa-action" data-tone="rose" @click="inactivate">
+                        <button v-if="canFull('clients')" type="button" class="mesa-action" data-tone="rose" @click="inactivate">
                             <strong>Inactivar</strong>
                             <small>Conservar historial</small>
                         </button>
@@ -120,7 +122,7 @@ const submitTransfer = () => transfer.post(props.endpoints.transfer, { preserveS
                         <h2 class="text-sm font-semibold">Vendedor responsable</h2>
                         <p class="mt-4 text-sm font-semibold">{{ client.seller_name || 'Sin asignar' }}</p>
                         <p class="mt-1 text-[11px] text-slate-400">{{ client.seller_code }}</p>
-                        <form class="mt-4 space-y-3" @submit.prevent="submitTransfer">
+                        <form v-if="canFull('clients')" class="mt-4 space-y-3" @submit.prevent="submitTransfer">
                             <select v-model="transfer.seller_id" class="w-full rounded-lg border px-3 py-2 text-xs"><option v-for="seller in sellers" :key="seller.id" :value="seller.id">{{ seller.display_name }}</option></select>
                             <textarea v-model="transfer.reason" required rows="2" class="w-full rounded-lg border p-3 text-xs" placeholder="Motivo de transferencia"></textarea>
                             <button class="btn-soft w-full">Transferir cartera</button>

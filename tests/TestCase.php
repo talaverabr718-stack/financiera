@@ -31,6 +31,7 @@ abstract class TestCase extends BaseTestCase
     {
         Loan::query()->whereIn('status', Loan::COLLECTIBLE_STATUSES)->update([
             'status' => 'paid',
+            'open_guard' => null,
             'principal_balance' => 0,
             'interest_balance' => 0,
             'fee_balance' => 0,

@@ -21,7 +21,7 @@ class CreditApplicationModuleTest extends TestCase
     {
         $this->seed(ClientModuleSeeder::class);
         $user = User::firstOrFail();
-        $payload = ['client_id' => Client::firstOrFail()->id, 'seller_id' => SellerProfile::firstOrFail()->id, 'credit_product_id' => CreditProduct::firstOrFail()->id, 'requested_amount' => '10000.00', 'currency' => 'NIO', 'purpose' => 'Capital de trabajo', 'installment_amount' => '1000.00', 'payment_frequency' => 'weekly', 'applied_on' => today()->subDay()->format('Y-m-d'), 'status' => 'draft'];
+        $payload = ['client_id' => Client::firstOrFail()->id, 'seller_id' => SellerProfile::firstOrFail()->id, 'credit_product_id' => CreditProduct::firstOrFail()->id, 'requested_amount' => '10000.00', 'currency' => 'NIO', 'purpose' => 'Capital de trabajo', 'term_value' => 10, 'term_unit' => 'weekly', 'payment_frequency' => 'weekly', 'interest_rate' => '0', 'applied_on' => today()->subDay()->format('Y-m-d'), 'status' => 'draft'];
 
         $this->actingAs($user)->get(route('applications.create'))
             ->assertOk()
@@ -44,7 +44,7 @@ class CreditApplicationModuleTest extends TestCase
 
         $this->actingAs($user)->post(route('applications.store'), array_merge($payload, [
             'purpose' => 'Inventario con saldo',
-            'installment_amount' => '3000.00',
+            'term_value' => 4,
         ]))->assertSessionHasNoErrors();
         $this->assertSame(4, CreditApplication::query()->where('purpose', 'Inventario con saldo')->value('term'));
 
@@ -53,6 +53,8 @@ class CreditApplicationModuleTest extends TestCase
 
         $this->assertSame('approved', $application->fresh()->status);
         $this->assertSame('9000.00', $application->fresh()->approved_amount);
+        $this->assertSame('900.00', $application->fresh()->installment_amount);
+        $this->assertSame('9000.00', $application->fresh()->total_payable);
         $this->assertNotNull($application->fresh()->decided_at);
         $this->assertSame(now()->addWeek()->toDateString(), $application->fresh()->proposed_first_payment_date->toDateString());
         $this->assertNotNull($application->fresh()->approved_at);
@@ -69,7 +71,7 @@ class CreditApplicationModuleTest extends TestCase
         $this->seed(ClientModuleSeeder::class);
         $user = User::firstOrFail();
         $client = Client::firstOrFail();
-        $payload = ['client_id' => $client->id, 'seller_id' => SellerProfile::firstOrFail()->id, 'credit_product_id' => CreditProduct::firstOrFail()->id, 'requested_amount' => '10000.00', 'currency' => 'NIO', 'purpose' => 'Capital de trabajo', 'installment_amount' => '1000.00', 'payment_frequency' => 'weekly', 'status' => 'draft'];
+        $payload = ['client_id' => $client->id, 'seller_id' => SellerProfile::firstOrFail()->id, 'credit_product_id' => CreditProduct::firstOrFail()->id, 'requested_amount' => '10000.00', 'currency' => 'NIO', 'purpose' => 'Capital de trabajo', 'term_value' => 10, 'term_unit' => 'weekly', 'payment_frequency' => 'weekly', 'interest_rate' => '0', 'status' => 'draft'];
 
         $this->actingAs($user)->get(route('applications.create', ['client_id' => $client->id]))
             ->assertOk()
@@ -94,20 +96,26 @@ class CreditApplicationModuleTest extends TestCase
         $user = User::firstOrFail();
         $product = CreditProduct::firstOrFail();
         $product->update(['default_interest_rate' => '12.000000', 'default_interest_method' => 'french']);
-        $payload = ['client_id' => Client::firstOrFail()->id, 'seller_id' => SellerProfile::firstOrFail()->id, 'credit_product_id' => $product->id, 'requested_amount' => '10000.00', 'currency' => 'NIO', 'purpose' => 'Capital de trabajo', 'installment_amount' => '1000.00', 'payment_frequency' => 'monthly', 'interest_rate' => '12', 'status' => 'draft'];
+        $payload = ['client_id' => Client::firstOrFail()->id, 'seller_id' => SellerProfile::firstOrFail()->id, 'credit_product_id' => $product->id, 'requested_amount' => '5000.00', 'currency' => 'NIO', 'purpose' => 'Capital de trabajo', 'term_value' => 3, 'term_unit' => 'monthly', 'payment_frequency' => 'weekly', 'interest_rate' => '16', 'status' => 'draft'];
 
         $this->actingAs($user)->post(route('applications.store'), $payload)->assertSessionHasNoErrors();
 
         $application = CreditApplication::query()->where('purpose', 'Capital de trabajo')->latest('id')->firstOrFail();
-        $this->assertSame(10, $application->term);
-        $this->assertSame('12.000000', $application->interest_rate);
-        $this->assertSame('french', $application->interest_method);
-        $this->assertTrue(bccomp($application->installment_amount, '1000.00', 2) === 1);
+        $this->assertSame(12, $application->term);
+        $this->assertSame(3, $application->term_value);
+        $this->assertSame('monthly', $application->term_unit);
+        $this->assertSame('16.000000', $application->interest_rate);
+        $this->assertSame('flat', $application->interest_method);
+        $this->assertSame('2400.00', $application->total_interest);
+        $this->assertSame('7400.00', $application->total_payable);
+        $this->assertSame('616.67', $application->installment_amount);
 
         $this->actingAs($user)->post(route('applications.store'), array_merge($payload, [
             'purpose' => 'Demasiados pagos',
-            'installment_amount' => '20.00',
-        ]))->assertSessionHasErrors('term');
+            'term_value' => 2,
+            'term_unit' => 'yearly',
+            'payment_frequency' => 'daily',
+        ]))->assertSessionHasErrors('term_value');
     }
 
     public function test_sequence_skips_numbers_that_already_exist(): void
@@ -116,7 +124,7 @@ class CreditApplicationModuleTest extends TestCase
         $this->cancelOpenCredits();
         $user = User::firstOrFail();
         DB::table('document_sequences')->where('key', 'credit_application')->update(['next_number' => 1]);
-        $payload = ['client_id' => Client::firstOrFail()->id, 'seller_id' => SellerProfile::firstOrFail()->id, 'credit_product_id' => CreditProduct::firstOrFail()->id, 'requested_amount' => '5000.00', 'currency' => 'NIO', 'purpose' => 'Inventario', 'term' => 9, 'payment_frequency' => 'daily', 'status' => 'draft'];
+        $payload = ['client_id' => Client::firstOrFail()->id, 'seller_id' => SellerProfile::firstOrFail()->id, 'credit_product_id' => CreditProduct::firstOrFail()->id, 'requested_amount' => '5000.00', 'currency' => 'NIO', 'purpose' => 'Inventario', 'term_value' => 9, 'term_unit' => 'daily', 'payment_frequency' => 'daily', 'interest_rate' => '0', 'status' => 'draft'];
 
         $this->actingAs($user)->post(route('applications.store'), $payload)->assertSessionHasNoErrors();
 

@@ -39,13 +39,25 @@ class SettingsModuleTest extends TestCase
         $this->assertDatabaseHas('document_sequences', ['key' => 'client', 'prefix' => 'CL-', 'padding' => 8, 'next_number' => 27]);
     }
 
-    public function test_appearance_is_persisted_and_applied_to_global_layout(): void
+    public function test_appearance_is_persisted_for_the_current_user_only(): void
     {
+        $currentUser = auth()->user();
         $this->put(route('settings.appearance.update'), ['primary_color' => '#0f766e', 'sidebar_color' => '#172554', 'accent_color' => '#2dd4bf', 'background_color' => '#f0fdfa', 'palette' => 'custom', 'font_family' => 'merriweather', 'density' => 'compact', 'border_radius' => 'rounded'])->assertRedirect();
+        $this->assertDatabaseHas('user_appearance_preferences', [
+            'user_id' => $currentUser->id,
+            'primary_color' => '#0f766e',
+            'density' => 'compact',
+        ]);
+        $this->assertDatabaseMissing('system_settings', ['key' => 'primary_color', 'value' => '#0f766e']);
         $this->get(route('settings.index'))->assertOk()->assertInertia(fn (Assert $page) => $page
             ->where('appearance.primary_color', '#0f766e')
             ->where('appearance.density', 'compact')
             ->where('appearance.theme', 'day'));
+
+        $otherUser = User::factory()->create();
+        $this->actingAs($otherUser)->get(route('settings.index'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('appearance.primary_color', '#1d4ed8')
+            ->where('appearance.density', 'comfortable'));
     }
 
     public function test_appearance_can_switch_to_the_light_office_theme(): void

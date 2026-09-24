@@ -6,7 +6,9 @@ import PaginationLinks from '../../components/ui/PaginationLinks.vue';
 import ResourceToolbar from '../../components/ui/ResourceToolbar.vue';
 import { useResourceFilters } from '../../composables/useResourceFilters';
 import { router, usePage } from '@inertiajs/vue3';
+import { usePermissions } from '../../composables/usePermissions.js';
 
+const { canManage } = usePermissions();
 const props = defineProps({ cases: Object, board: { type: Object, default: () => ({}) }, filters: Object, endpoints: Object });
 const page = usePage();
 const { filters, clear } = useResourceFilters({
@@ -43,7 +45,7 @@ const recalculate = () => router.post(props.endpoints.recalculate);
                 fill-id="delinquency-trade-fill"
             >
                 <template #actions>
-                    <button type="button" class="mesa-action" data-tone="rose" @click="recalculate">
+                    <button v-if="canManage('delinquency')" type="button" class="mesa-action" data-tone="rose" @click="recalculate">
                         <strong>Recalcular mora</strong>
                         <small>Actualizar cuotas vencidas</small>
                     </button>

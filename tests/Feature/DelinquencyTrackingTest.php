@@ -2,8 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\Client;
-use App\Models\CreditApplication;
 use App\Models\DelinquencyAccrual;
 use App\Models\DelinquencyCase;
 use App\Models\Loan;
@@ -11,7 +9,6 @@ use App\Models\LoanInstallment;
 use App\Models\Payment;
 use App\Models\PaymentAllocation;
 use App\Models\PaymentReversal;
-use App\Models\SellerProfile;
 use App\Models\User;
 use App\Services\DelinquencyTrackingService;
 use Database\Seeders\ClientModuleSeeder;
@@ -66,7 +63,7 @@ class DelinquencyTrackingTest extends TestCase
     public function test_correlative_codes_are_unique(): void
     {
         $first = $this->loan();
-        $second = $this->secondLoan($first->client);
+        $second = Loan::query()->whereKeyNot($first->id)->firstOrFail();
         $this->addInstallment($first, 1, '2026-08-10', '1000.00');
         $this->addInstallment($second, 1, '2026-08-10', '800.00');
         $this->travelTo($this->at('2026-08-12 10:00:00'));
@@ -166,10 +163,10 @@ class DelinquencyTrackingTest extends TestCase
         $this->assertCount(3, $case->items);
     }
 
-    public function test_a_client_can_have_independent_cases_per_loan(): void
+    public function test_different_clients_can_have_independent_delinquency_cases(): void
     {
         $first = $this->loan();
-        $second = $this->secondLoan($first->client);
+        $second = Loan::query()->whereKeyNot($first->id)->firstOrFail();
         $this->addInstallment($first, 1, '2026-08-10', '1000.00');
         $this->addInstallment($second, 1, '2026-08-05', '700.00');
         $this->travelTo($this->at('2026-08-12 10:00:00'));
@@ -177,7 +174,8 @@ class DelinquencyTrackingTest extends TestCase
         $this->delinquency->recalculateLoan($first->fresh('installments'));
         $this->delinquency->recalculateLoan($second->fresh('installments'));
 
-        $this->assertSame(2, DelinquencyCase::where('client_id', $first->client_id)->where('status', 'active')->count());
+        $this->assertSame(1, DelinquencyCase::where('client_id', $first->client_id)->where('status', 'active')->count());
+        $this->assertSame(1, DelinquencyCase::where('client_id', $second->client_id)->where('status', 'active')->count());
         $this->assertSame(2, DelinquencyCase::where('loan_id', $first->id)->value('current_days'));
         $this->assertSame(7, DelinquencyCase::where('loan_id', $second->id)->value('current_days'));
     }
@@ -380,7 +378,7 @@ class DelinquencyTrackingTest extends TestCase
         $this->travelTo($this->at('2026-08-16 10:00:00'));
 
         $this->from(route('loans.show', $loan))
-            ->post(route('loans.delinquency.recalculate', $loan), [])
+            ->post(route('loans.delinquency.recalculate', $loan), ['method' => 'daily_percentage'])
             ->assertRedirect(route('loans.show', $loan))
             ->assertSessionHasErrors('daily_rate');
 
@@ -404,6 +402,48 @@ class DelinquencyTrackingTest extends TestCase
             'method' => 'daily_percentage',
             'days_overdue' => 6,
             'amount' => '60.00',
+            'status' => 'posted',
+        ]);
+    }
+
+    public function test_recalculate_accepts_a_fixed_charge_once_per_overdue_installment(): void
+    {
+        $loan = $this->loan();
+        $this->addInstallment($loan, 1, '2026-08-10', '1000.00');
+        $this->addInstallment($loan, 2, '2026-08-20', '800.00');
+        $this->travelTo($this->at('2026-08-16 10:00:00'));
+
+        $this->from(route('loans.show', $loan))
+            ->post(route('loans.delinquency.recalculate', $loan), [
+                'method' => 'fixed',
+                'fixed_amount' => '15.00',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $loan = $loan->fresh('installments');
+        $first = $loan->installments->firstWhere('number', 1);
+        $second = $loan->installments->firstWhere('number', 2);
+
+        $this->assertSame('fixed', $loan->delinquency_method);
+        $this->assertNull($loan->delinquency_daily_rate);
+        $this->assertSame('15.00', $loan->delinquency_fixed_amount);
+        $this->assertSame('15.00', $first->delinquency_due);
+        $this->assertSame('0.00', $second->delinquency_due);
+        $this->assertSame('15.00', $loan->delinquency_balance);
+        $firstRow = $this->delinquency->summarizeLoan($loan)['ledger']->firstWhere('number', 1);
+        $secondRow = $this->delinquency->summarizeLoan($loan)['ledger']->firstWhere('number', 2);
+        $this->assertSame('1000.00', $firstRow['installment_amount']);
+        $this->assertSame('1000.00', $firstRow['overdue_balance']);
+        $this->assertSame('1015.00', $firstRow['total_to_pay']);
+        $this->assertSame('0.00', $secondRow['overdue_balance']);
+        $this->assertSame('800.00', $secondRow['total_to_pay']);
+        $this->assertDatabaseHas('delinquency_accruals', [
+            'installment_id' => $first->id,
+            'method' => 'fixed',
+            'rate' => '15.000000',
+            'days_overdue' => 6,
+            'amount' => '15.00',
             'status' => 'posted',
         ]);
     }
@@ -437,39 +477,6 @@ class DelinquencyTrackingTest extends TestCase
     private function loan(): Loan
     {
         return Loan::query()->firstOrFail();
-    }
-
-    private function secondLoan(Client $client): Loan
-    {
-        $application = CreditApplication::create([
-            'number' => 'SOL-MORA-2',
-            'client_id' => $client->id,
-            'seller_id' => SellerProfile::firstOrFail()->id,
-            'credit_product_id' => $this->loan()->application->credit_product_id,
-            'status' => 'disbursed',
-            'requested_amount' => '7000.00',
-            'approved_amount' => '7000.00',
-            'currency' => 'NIO',
-            'purpose' => 'Capital de trabajo',
-            'term' => 10,
-            'payment_frequency' => 'weekly',
-            'economic_snapshot' => [],
-        ]);
-
-        return Loan::create([
-            'number' => 'PRE-MORA-2',
-            'credit_application_id' => $application->id,
-            'client_id' => $client->id,
-            'seller_id' => SellerProfile::firstOrFail()->id,
-            'status' => 'active',
-            'currency' => 'NIO',
-            'principal' => '7000.00',
-            'principal_balance' => '7000.00',
-            'interest_balance' => '0.00',
-            'fee_balance' => '0.00',
-            'approved_terms' => ['term' => 10, 'frequency' => 'weekly'],
-            'disbursed_at' => '2026-07-01',
-        ]);
     }
 
     private function addInstallment(Loan $loan, int $number, string $dueDate, string $principal, string $paid = '0.00', string $status = 'pending'): LoanInstallment

@@ -11,12 +11,15 @@ use App\Models\Loan;
 use App\Models\LoanInstallment;
 use App\Models\Payment;
 use App\Models\SellerProfile;
+use App\Services\PortfolioAccessService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
+    public function __construct(private PortfolioAccessService $portfolioAccess) {}
+
     public function __invoke()
     {
         if (! Schema::hasTable('loans')) {
@@ -24,23 +27,24 @@ class DashboardController extends Controller
         }
 
         $now = now()->timezone(config('app.timezone'));
-        $loans = Loan::query();
+        $user = request()->user();
+        $loans = $this->portfolioAccess->scopeByClient(Loan::query(), $user);
         $stats = [
             'activePortfolio' => (clone $loans)->whereIn('status', Loan::COLLECTIBLE_STATUSES)->selectRaw('COALESCE(SUM(principal_balance + interest_balance + fee_balance + delinquency_balance),0) total')->value('total'),
             'placed' => (clone $loans)->whereBetween('disbursed_at', [now()->startOfMonth(), now()->endOfMonth()])->sum('principal'),
             'placedLastMonth' => (clone $loans)->whereBetween('disbursed_at', [now()->subMonthNoOverflow()->startOfMonth(), now()->subMonthNoOverflow()->endOfMonth()])->sum('principal'),
-            'collectedToday' => CollectionRecord::where('outcome', 'collected')->whereDate('recorded_at', today())->sum('amount'),
-            'collectedYesterday' => CollectionRecord::where('outcome', 'collected')->whereDate('recorded_at', today()->subDay())->sum('amount'),
+            'collectedToday' => $this->portfolioAccess->scopeByClient(CollectionRecord::query(), $user)->where('outcome', 'collected')->whereDate('recorded_at', today())->sum('amount'),
+            'collectedYesterday' => $this->portfolioAccess->scopeByClient(CollectionRecord::query(), $user)->where('outcome', 'collected')->whereDate('recorded_at', today()->subDay())->sum('amount'),
             'activeLoans' => (clone $loans)->whereIn('status', Loan::COLLECTIBLE_STATUSES)->count(),
             'delinquentLoans' => (clone $loans)->where('status', 'delinquent')->count(),
-            'pendingApplications' => CreditApplication::whereIn('status', ['submitted', 'review', 'approved'])->count(),
-            'clients' => Client::where('status', 'active')->count(),
-            'routesToday' => CollectionRoute::whereDate('scheduled_date', today())->count(),
+            'pendingApplications' => $this->portfolioAccess->scopeByClient(CreditApplication::query(), $user)->whereIn('status', ['submitted', 'review', 'approved'])->count(),
+            'clients' => $this->portfolioAccess->scopeClients(Client::query(), $user)->where('status', 'active')->count(),
+            'routesToday' => $this->portfolioAccess->scopeBySeller(CollectionRoute::query(), $user, 'collector_id')->whereDate('scheduled_date', today())->count(),
         ];
         $stats['delinquencyRate'] = $stats['activeLoans'] ? round($stats['delinquentLoans'] / $stats['activeLoans'] * 100, 1) : 0;
 
         $dueToday = LoanInstallment::query()
-            ->whereHas('loan', fn ($query) => $query->whereIn('status', Loan::COLLECTIBLE_STATUSES))
+            ->whereHas('loan', fn ($query) => $this->portfolioAccess->scopeByClient($query, $user)->whereIn('status', Loan::COLLECTIBLE_STATUSES))
             ->whereDate('due_date', today())
             ->whereNotIn('status', LoanInstallment::EXCLUDED_STATUSES)
             ->get()
@@ -55,7 +59,7 @@ class DashboardController extends Controller
             : ((float) $stats['collectedToday'] > 0 ? 100 : 0);
 
         $overdueInstallments = LoanInstallment::with('loan.client')
-            ->whereHas('loan', fn ($query) => $query->whereIn('status', Loan::COLLECTIBLE_STATUSES))
+            ->whereHas('loan', fn ($query) => $this->portfolioAccess->scopeByClient($query, $user)->whereIn('status', Loan::COLLECTIBLE_STATUSES))
             ->whereDate('due_date', '<', today())
             ->whereNotIn('status', LoanInstallment::EXCLUDED_STATUSES)
             ->orderBy('due_date')
@@ -80,7 +84,7 @@ class DashboardController extends Controller
         $aging = $aging->values();
         $overdueAmount = $overdueInstallments->reduce(fn (string $total, LoanInstallment $installment) => bcadd($total, $installment->outstandingAmount(), 2), '0.00');
 
-        $todayStops = CollectionRouteStop::query()
+        $todayStops = $this->portfolioAccess->scopeByClient(CollectionRouteStop::query(), $user)
             ->with(['client', 'route.collector.user', 'records'])
             ->whereHas('route', fn ($query) => $query->whereDate('scheduled_date', today()))
             ->get()
@@ -119,7 +123,7 @@ class DashboardController extends Controller
 
             return [
                 'label' => $month->translatedFormat('M Y'),
-                'value' => (float) Loan::whereBetween('disbursed_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])->sum('principal'),
+                'value' => (float) $this->portfolioAccess->scopeByClient(Loan::query(), request()->user())->whereBetween('disbursed_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])->sum('principal'),
             ];
         });
         $collectionTrend = collect(range(6, 0))->map(function (int $daysAgo) {
@@ -127,11 +131,11 @@ class DashboardController extends Controller
 
             return [
                 'label' => $date->translatedFormat('D d'),
-                'value' => (float) CollectionRecord::where('outcome', 'collected')->whereDate('recorded_at', $date)->sum('amount'),
+                'value' => (float) $this->portfolioAccess->scopeByClient(CollectionRecord::query(), request()->user())->where('outcome', 'collected')->whereDate('recorded_at', $date)->sum('amount'),
             ];
         });
 
-        $decisionQueue = CreditApplication::with(['client', 'product'])
+        $decisionQueue = $this->portfolioAccess->scopeByClient(CreditApplication::query(), $user)->with(['client', 'product'])
             ->whereIn('status', ['submitted', 'review', 'approved'])
             ->orderBy('created_at')
             ->take(6)
@@ -179,7 +183,7 @@ class DashboardController extends Controller
             });
 
         $upcomingInstallments = LoanInstallment::with('loan.client')
-            ->whereHas('loan', fn ($query) => $query->whereIn('status', Loan::COLLECTIBLE_STATUSES))
+            ->whereHas('loan', fn ($query) => $this->portfolioAccess->scopeByClient($query, $user)->whereIn('status', Loan::COLLECTIBLE_STATUSES))
             ->whereDate('due_date', '>=', today())
             ->whereNotIn('status', array_merge(LoanInstallment::EXCLUDED_STATUSES, ['paid']))
             ->orderBy('due_date')
@@ -194,7 +198,7 @@ class DashboardController extends Controller
                 'client' => $installment->loan->client?->only('id', 'full_name'),
             ]);
 
-        $recentPayments = Payment::with('client')
+        $recentPayments = $this->portfolioAccess->scopeByClient(Payment::query(), $user)->with('client')
             ->where('status', 'applied')
             ->latest('received_at')
             ->take(8)
@@ -211,7 +215,7 @@ class DashboardController extends Controller
                 'url' => $payment->client ? route('clients.show', $payment->client) : route('collections.index'),
             ]);
 
-        $fieldActivity = CollectionRecord::with(['client', 'collector.user'])
+        $fieldActivity = $this->portfolioAccess->scopeByClient(CollectionRecord::query(), $user)->with(['client', 'collector.user'])
             ->whereDate('recorded_at', today())
             ->latest('recorded_at')
             ->take(10)
@@ -252,7 +256,7 @@ class DashboardController extends Controller
         $paymentMix = $this->paymentMix();
         $dailyReport = $this->dailyReport();
         $neighborhoods = $this->neighborhoods($todayStops, $overdueInstallments);
-        $promisesToday = CollectionRecord::with(['client', 'collector.user'])
+        $promisesToday = $this->portfolioAccess->scopeByClient(CollectionRecord::query(), $user)->with(['client', 'collector.user'])
             ->where('outcome', 'promise')
             ->whereDate('promise_date', today())
             ->latest('recorded_at')
@@ -386,7 +390,7 @@ class DashboardController extends Controller
     private function dailyReport(): array
     {
         $usedPaymentIds = collect();
-        $routes = CollectionRoute::query()
+        $routes = $this->portfolioAccess->scopeBySeller(CollectionRoute::query(), request()->user(), 'collector_id')
             ->with([
                 'collector.user',
                 'stops.client',
@@ -441,7 +445,7 @@ class DashboardController extends Controller
             ];
         })->values();
 
-        $otherPayments = Payment::query()
+        $otherPayments = $this->portfolioAccess->scopeByClient(Payment::query(), request()->user())
             ->with(['client', 'loan', 'allocations.installment', 'collector'])
             ->where('status', 'applied')
             ->whereDate('received_at', today())
@@ -517,10 +521,11 @@ class DashboardController extends Controller
 
     private function collectorBoard(): Collection
     {
-        $todayRoutes = CollectionRoute::with(['stops', 'collector.user', 'collector.zone'])
+        $todayRoutes = $this->portfolioAccess->scopeBySeller(CollectionRoute::query(), request()->user(), 'collector_id')
+            ->with(['stops', 'collector.user', 'collector.zone'])
             ->whereDate('scheduled_date', today())
             ->get();
-        $collectorTotals = CollectionRecord::where('outcome', 'collected')
+        $collectorTotals = $this->portfolioAccess->scopeByClient(CollectionRecord::query(), request()->user())->where('outcome', 'collected')
             ->whereDate('recorded_at', today())
             ->selectRaw('collector_id, COUNT(*) operations, COALESCE(SUM(amount),0) amount')
             ->groupBy('collector_id')
@@ -531,7 +536,7 @@ class DashboardController extends Controller
             return collect();
         }
 
-        return SellerProfile::with(['user', 'zone'])->whereIn('id', $ids)->get()->map(function (SellerProfile $seller) use ($todayRoutes, $collectorTotals) {
+        return $this->portfolioAccess->scopeSellers(SellerProfile::query(), request()->user())->with(['user', 'zone'])->whereIn('id', $ids)->get()->map(function (SellerProfile $seller) use ($todayRoutes, $collectorTotals) {
             $stops = $todayRoutes->where('collector_id', $seller->id)->flatMap->stops;
             $pending = $stops->where('status', 'pending')->count();
             $visited = $stops->where('status', 'visited')->count();
@@ -560,7 +565,7 @@ class DashboardController extends Controller
 
     private function paymentMix(): Collection
     {
-        $raw = CollectionRecord::query()
+        $raw = $this->portfolioAccess->scopeByClient(CollectionRecord::query(), request()->user())
             ->where('outcome', 'collected')
             ->whereDate('recorded_at', today())
             ->selectRaw('payment_method, COUNT(*) operations, COALESCE(SUM(amount),0) amount')

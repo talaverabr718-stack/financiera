@@ -8,6 +8,7 @@ use InvalidArgumentException;
 class AmortizationCalculator
 {
     public const METHODS = [
+        'monthly_flat' => 'Interés simple mensual',
         'level_payment' => 'Cuota nivelada (francés)',
         'constant_principal' => 'Capital constante',
         'flat_interest' => 'Interés plano',
@@ -26,22 +27,38 @@ class AmortizationCalculator
         'declining_balance' => 'constant_principal',
     ];
 
+    public const MONTHLY_PAYMENT_FACTORS = [
+        'weekly' => 4,
+        'biweekly' => 2,
+        'monthly' => 1,
+    ];
+
     public const MAX_PERIODS = 365;
 
     public function calculate(array $data): array
     {
         $principal = round((float) $data['principal'], 2);
         $annualRate = (float) $data['annual_rate'];
-        $periods = (int) $data['periods'];
         $method = $data['method'];
         $frequency = $data['frequency'];
+        $termMonths = $method === 'monthly_flat' ? (int) ($data['term_months'] ?? 0) : null;
+        $periods = $method === 'monthly_flat'
+            ? $termMonths * (self::MONTHLY_PAYMENT_FACTORS[$frequency] ?? 0)
+            : (int) ($data['periods'] ?? 0);
         $firstPaymentDate = CarbonImmutable::parse($data['first_payment_date']);
 
-        if (! isset(self::METHODS[$method], self::FREQUENCIES[$frequency])) {
+        if (
+            ! isset(self::METHODS[$method], self::FREQUENCIES[$frequency])
+            || ($method === 'monthly_flat' && (! isset(self::MONTHLY_PAYMENT_FACTORS[$frequency]) || $termMonths < 1))
+            || $periods < 1
+            || $periods > self::MAX_PERIODS
+        ) {
             throw new InvalidArgumentException('Método o frecuencia no soportados.');
         }
 
-        $periodicRate = $annualRate / 100 / self::FREQUENCIES[$frequency]['periods_per_year'];
+        $periodicRate = $method === 'monthly_flat'
+            ? $annualRate / 100
+            : $annualRate / 100 / self::FREQUENCIES[$frequency]['periods_per_year'];
         $balance = $principal;
         $rows = [];
         $totalInterest = 0.0;
@@ -51,14 +68,22 @@ class AmortizationCalculator
             ? ($periodicRate == 0.0 ? $principal / $periods : $principal * $periodicRate / (1 - pow(1 + $periodicRate, -$periods)))
             : 0.0;
         $constantPrincipal = $principal / $periods;
-        $flatInterest = $principal * ($annualRate / 100) / self::FREQUENCIES[$frequency]['periods_per_year'];
+        $targetFlatInterest = $method === 'monthly_flat'
+            ? round($principal * ($annualRate / 100) * $termMonths, 2)
+            : null;
+        $flatInterest = $method === 'monthly_flat'
+            ? $targetFlatInterest / $periods
+            : $principal * ($annualRate / 100) / self::FREQUENCIES[$frequency]['periods_per_year'];
 
         for ($number = 1; $number <= $periods; $number++) {
             $openingBalance = $balance;
             $interest = match ($method) {
-                'flat_interest' => $flatInterest,
+                'flat_interest', 'monthly_flat' => $flatInterest,
                 default => $openingBalance * $periodicRate,
             };
+            if ($method === 'monthly_flat' && $number === $periods) {
+                $interest = $targetFlatInterest - $totalInterest;
+            }
             $principalPayment = match ($method) {
                 'level_payment' => $levelPayment - $interest,
                 default => $constantPrincipal,
@@ -86,6 +111,12 @@ class AmortizationCalculator
             'principal' => number_format($principal, 2, '.', ''),
             'annual_rate' => number_format($annualRate, 6, '.', ''),
             'periodic_rate' => number_format($periodicRate * 100, 6, '.', ''),
+            'rate_label' => $method === 'monthly_flat' ? 'Tasa mensual' : 'Tasa periódica',
+            'total_rate' => number_format($principal > 0 ? ($totalInterest / $principal) * 100 : 0, 6, '.', ''),
+            'method' => $method,
+            'frequency' => $frequency,
+            'periods' => $periods,
+            'term_months' => $termMonths,
             'total_interest' => number_format($totalInterest, 2, '.', ''),
             'total_payment' => number_format($totalPayment, 2, '.', ''),
             'average_payment' => number_format($totalPayment / $periods, 2, '.', ''),

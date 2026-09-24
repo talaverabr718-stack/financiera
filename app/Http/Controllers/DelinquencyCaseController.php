@@ -7,13 +7,17 @@ use App\Http\Requests\RecalculateLoanDelinquencyRequest;
 use App\Models\DelinquencyCase;
 use App\Models\Loan;
 use App\Services\DelinquencyTrackingService;
+use App\Services\PortfolioAccessService;
 use App\Support\OperationalMesa;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class DelinquencyCaseController extends Controller
 {
-    public function __construct(private DelinquencyTrackingService $delinquency) {}
+    public function __construct(
+        private DelinquencyTrackingService $delinquency,
+        private PortfolioAccessService $portfolioAccess,
+    ) {}
 
     public function index(Request $request)
     {
@@ -31,7 +35,7 @@ class DelinquencyCaseController extends Controller
             $direction = 'asc';
         }
 
-        $cases = DelinquencyCase::query()
+        $cases = $this->portfolioAccess->scopeByClient(DelinquencyCase::query(), $request->user())
             ->with(['client.activeAssignment.seller.user', 'loan', 'oldestInstallment', 'items'])
             ->when($request->filled('search'), function ($query) use ($request) {
                 $term = '%'.$request->search.'%';
@@ -52,7 +56,7 @@ class DelinquencyCaseController extends Controller
         };
 
         $cases = $cases->orderBy('id')->paginate(15)->withQueryString();
-        $base = DelinquencyCase::query();
+        $base = $this->portfolioAccess->scopeByClient(DelinquencyCase::query(), $request->user());
         $active = (clone $base)->where('status', DelinquencyCase::STATUS_ACTIVE)->count();
         $resolved = (clone $base)->where('status', DelinquencyCase::STATUS_RESOLVED)->count();
         $cancelled = (clone $base)->where('status', DelinquencyCase::STATUS_CANCELLED)->count();
@@ -109,6 +113,7 @@ class DelinquencyCaseController extends Controller
 
     public function recalculateAll(Request $request)
     {
+        $this->portfolioAccess->authorizeGlobal($request->user());
         $result = $this->delinquency->recalculateDueLoans(now(), [
             'trigger' => 'manual',
             'actor_id' => $request->user()->id,
@@ -119,17 +124,21 @@ class DelinquencyCaseController extends Controller
 
     public function recalculate(RecalculateLoanDelinquencyRequest $request, Loan $loan)
     {
+        $this->portfolioAccess->authorizeClientId($request->user(), (int) $loan->client_id);
         $this->delinquency->recalculateLoan($loan, now(), [
             'trigger' => 'manual',
             'actor_id' => $request->user()->id,
+            'method' => $request->validated('method'),
             'daily_rate' => $request->validated('daily_rate'),
+            'fixed_amount' => $request->validated('fixed_amount'),
         ]);
 
-        return back()->with('success', 'La mora del crédito se recalculó y el monto por día de retraso quedó aplicado en cada cuota vencida.');
+        return back()->with('success', 'La política de mora del crédito se guardó y el cargo quedó aplicado en cada cuota vencida.');
     }
 
     public function cancel(CancelDelinquencyCaseRequest $request, DelinquencyCase $delinquencyCase)
     {
+        $this->portfolioAccess->authorizeClientId($request->user(), (int) $delinquencyCase->client_id);
         $this->delinquency->cancel($delinquencyCase, $request->validated('reason'), $request->user()->id);
 
         return back()->with('success', 'El expediente de mora fue cancelado y permanece en el historial.');
@@ -137,6 +146,7 @@ class DelinquencyCaseController extends Controller
 
     public function reopen(CancelDelinquencyCaseRequest $request, DelinquencyCase $delinquencyCase)
     {
+        $this->portfolioAccess->authorizeClientId($request->user(), (int) $delinquencyCase->client_id);
         $this->delinquency->reopen($delinquencyCase, $request->validated('reason'), $request->user()->id);
 
         return back()->with('success', 'El expediente de mora fue reactivado.');

@@ -10,7 +10,10 @@ use App\Models\Guarantor;
 use App\Models\Loan;
 use App\Models\SellerProfile;
 use App\Services\CreditApplicationService;
+use App\Services\PortfolioAccessService;
+use App\Services\SimpleInterestProjectionService;
 use App\Support\OperationalMesa;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -20,11 +23,19 @@ use Inertia\Inertia;
 
 class CreditApplicationController extends Controller
 {
-    public function __construct(private CreditApplicationService $applications) {}
+    public function __construct(
+        private CreditApplicationService $applications,
+        private PortfolioAccessService $portfolioAccess,
+        private SimpleInterestProjectionService $projection,
+    ) {}
 
     public function index(Request $request)
     {
-        $applications = CreditApplication::with(['client', 'seller.user', 'product'])->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))->when($request->filled('search'), fn ($q) => $q->where(fn ($q) => $q->where('number', 'like', '%'.$request->search.'%')->orWhereHas('client', fn ($q) => $q->where('full_name', 'like', '%'.$request->search.'%'))))->latest()->paginate(15)->withQueryString();
+        $applications = $this->portfolioAccess->scopeByClient(CreditApplication::query(), $request->user())
+            ->with(['client', 'seller.user', 'product'])
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
+            ->when($request->filled('search'), fn ($q) => $q->where(fn ($q) => $q->where('number', 'like', '%'.$request->search.'%')->orWhereHas('client', fn ($q) => $q->where('full_name', 'like', '%'.$request->search.'%'))))
+            ->latest()->paginate(15)->withQueryString();
 
         return Inertia::render('Applications/Index', [
             'applications' => $applications,
@@ -38,7 +49,8 @@ class CreditApplicationController extends Controller
     {
         $application = new CreditApplication;
         if ($request->filled('client_id')) {
-            $client = Client::with('activeAssignment')->find($request->integer('client_id'));
+            $client = $this->portfolioAccess->scopeClients(Client::query(), $request->user())
+                ->with('activeAssignment')->find($request->integer('client_id'));
             if ($client?->canOriginateNewCredit()) {
                 $application->client_id = $client->id;
                 $application->seller_id = $client->activeAssignment?->seller_id;
@@ -50,31 +62,40 @@ class CreditApplicationController extends Controller
 
     public function edit(CreditApplication $application)
     {
+        $this->portfolioAccess->authorizeClientId(request()->user(), (int) $application->client_id);
         return $this->form($application);
     }
 
     public function store(CreditApplicationRequest $request)
     {
-        $application = $this->applications->create($request->validated());
+        $data = $request->validated();
+        $this->portfolioAccess->authorizeClientId($request->user(), (int) $data['client_id']);
+        $this->portfolioAccess->authorizeSellerId($request->user(), (int) $data['seller_id']);
+        $application = $this->applications->create($data);
 
         return redirect()->route('applications.show', $application)->with('success', 'Solicitud registrada.');
     }
 
     public function update(CreditApplicationRequest $request, CreditApplication $application)
     {
+        $this->portfolioAccess->authorizeClientId($request->user(), (int) $application->client_id);
         abort_if(in_array($application->status, ['disbursed', 'cancelled'], true), 422, 'Esta solicitud ya no admite edición directa.');
-        $this->applications->update($application, $request->validated());
+        $data = $request->validated();
+        $this->portfolioAccess->authorizeClientId($request->user(), (int) $data['client_id']);
+        $this->portfolioAccess->authorizeSellerId($request->user(), (int) $data['seller_id']);
+        $this->applications->update($application, $data);
 
         return redirect()->route('applications.show', $application)->with('success', 'Solicitud actualizada.');
     }
 
     public function show(CreditApplication $application)
     {
+        $this->portfolioAccess->authorizeClientId(request()->user(), (int) $application->client_id);
         $application->load(['client', 'seller.user', 'product', 'decidedBy', 'loan', 'disbursement.disbursedBy', 'guarantees.guarantor', 'guarantees.latestEvaluation', 'guarantees.loan']);
 
         return Inertia::render('Applications/Show', [
             'application' => [
-                ...$application->only(['id', 'number', 'status', 'requested_amount', 'approved_amount', 'currency', 'purpose', 'applied_on', 'term', 'installment_amount', 'payment_frequency', 'interest_rate', 'interest_method', 'requires_guarantor', 'decision_reason']),
+                ...$application->only(['id', 'number', 'status', 'requested_amount', 'approved_amount', 'currency', 'purpose', 'applied_on', 'term', 'term_value', 'term_unit', 'installment_amount', 'total_interest', 'total_payable', 'payment_frequency', 'interest_rate', 'interest_method', 'requires_guarantor', 'decision_reason']),
                 'client_name' => $application->client->full_name,
                 'product_name' => $application->product->name,
                 'seller_name' => $application->seller->display_name,
@@ -111,6 +132,7 @@ class CreditApplicationController extends Controller
 
     public function status(Request $request, CreditApplication $application)
     {
+        $this->portfolioAccess->authorizeClientId($request->user(), (int) $application->client_id);
         if (in_array($application->status, ['disbursed', 'cancelled'], true)) {
             return redirect()->route('applications.show', $application)
                 ->with('success', $application->status === 'disbursed'
@@ -126,13 +148,29 @@ class CreditApplicationController extends Controller
             $locked = CreditApplication::lockForUpdate()->findOrFail($application->id);
             $approval = $data['status'] === 'approved';
             $approvedAt = $approval ? ($locked->approved_at ?? now()) : $locked->approved_at;
+            $financialTerms = [];
+            if ($approval && $locked->term_value && $locked->term_unit) {
+                $projection = $this->projection->calculate(
+                    $data['approved_amount'],
+                    $locked->interest_rate,
+                    $locked->term_value,
+                    $locked->term_unit,
+                    $locked->payment_frequency,
+                );
+                $financialTerms = [
+                    'term' => $projection['payments'],
+                    'installment_amount' => $projection['installment_amount'],
+                    'total_interest' => $projection['total_interest'],
+                    'total_payable' => $projection['total_payable'],
+                ];
+            }
             $firstPaymentDate = $approval ? $this->firstInstallmentAfter($locked, $approvedAt) : $locked->proposed_first_payment_date;
             if ($approval) {
                 $locked->proposed_first_payment_date = $firstPaymentDate;
             }
             $lastPayment = $approval ? $this->estimateLastPaymentDate($locked, $approvedAt) : $locked->estimated_last_payment_date;
 
-            $locked->update($data + [
+            $locked->update($data + $financialTerms + [
                 'decided_by' => $decision ? auth()->id() : $locked->decided_by,
                 'decided_at' => $decision ? now() : $locked->decided_at,
                 'approved_at' => $approvedAt,
@@ -147,7 +185,7 @@ class CreditApplicationController extends Controller
             return response()->json([
                 'message' => 'Estado de la solicitud actualizado.',
                 'application' => [
-                    ...$fresh->only(['status', 'approved_amount', 'decision_reason']),
+                    ...$fresh->only(['status', 'approved_amount', 'decision_reason', 'term', 'installment_amount', 'total_interest', 'total_payable']),
                     'approved_at' => $fresh->approved_at?->toISOString(),
                     'proposed_first_payment_date' => $fresh->proposed_first_payment_date?->toDateString(),
                     'estimated_last_payment_date' => $fresh->estimated_last_payment_date?->toDateString(),
@@ -194,8 +232,8 @@ class CreditApplicationController extends Controller
 
         return Inertia::render('Applications/Form', [
             'application' => $application,
-            'clients' => Client::where('status', 'active')->withCount(['loans as open_loans_count' => fn ($query) => $query->whereIn('status', Loan::COLLECTIBLE_STATUSES)])->orderBy('full_name')->get(),
-            'sellers' => SellerProfile::with('user')->where('status', 'active')->whereJsonContains('capabilities', 'credit_origination')->get(),
+            'clients' => $this->portfolioAccess->scopeClients(Client::query(), request()->user())->where('status', 'active')->withCount(['loans as open_loans_count' => fn ($query) => $query->whereIn('status', Loan::COLLECTIBLE_STATUSES)])->orderBy('full_name')->get(),
+            'sellers' => $this->portfolioAccess->scopeSellers(SellerProfile::query(), request()->user())->with('user')->where('status', 'active')->whereJsonContains('capabilities', 'credit_origination')->get(),
             'products' => CreditProduct::where('is_active', true)->orderBy('name')->get(),
             'guarantors' => $guarantors,
             'editing' => $application->exists,
@@ -208,7 +246,7 @@ class CreditApplicationController extends Controller
 
     private function directoryBoard(): array
     {
-        $base = CreditApplication::query();
+        $base = $this->portfolioAccess->scopeByClient(CreditApplication::query(), request()->user());
         $labels = ['draft' => 'Borrador', 'submitted' => 'Enviada', 'review' => 'En revisión', 'approved' => 'Aprobada', 'rejected' => 'Rechazada', 'cancelled' => 'Cancelada', 'disbursed' => 'Desembolsada'];
         $tones = ['draft' => 'muted', 'submitted' => 'info', 'review' => 'warn', 'approved' => 'ok', 'rejected' => 'bad', 'cancelled' => 'muted', 'disbursed' => 'gold'];
         $counts = (clone $base)->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');

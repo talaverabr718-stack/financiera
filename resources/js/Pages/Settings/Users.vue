@@ -1,33 +1,30 @@
 <script setup>
 import { router, useForm } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import AppLayout from '../../Layouts/AppLayout.vue';
 import BaseModal from '../../components/ui/BaseModal.vue';
 import SettingsTabs from '../../components/ui/SettingsTabs.vue';
+import { usePermissions } from '../../composables/usePermissions.js';
 
-const props = defineProps({ users: Array, collaborators: Array, endpoints: Object, tabs: Array, currentUserId: Number });
+const props = defineProps({ users: Array, collaborators: Array, roles: Array, endpoints: Object, tabs: Array, currentUserId: Number });
 const modalOpen = ref(false);
 const editingUser = ref(null);
 const search = ref('');
 const showSecrets = ref(false);
 const modalStep = ref(1);
-const form = useForm({ name: '', email: '', collaborator_id: '', password: '', password_confirmation: '', pin: '', pin_confirmation: '', remove_pin: false });
+const { canFull } = usePermissions();
+const mayManage = computed(() => canFull('settings'));
+const form = useForm({ system_role_id: '', name: '', email: '', collaborator_id: '', password: '', password_confirmation: '', pin: '', pin_confirmation: '', remove_pin: false });
 const visibleUsers = computed(() => {
     const term = search.value.trim().toLocaleLowerCase('es');
     return term ? props.users.filter(user => `${user.name} ${user.email} ${user.seller_profile?.code || ''}`.toLocaleLowerCase('es').includes(term)) : props.users;
 });
-const availableCollaborators = computed(() => props.collaborators.filter(item => !item.user_id || item.user_id === editingUser.value?.id));
-const selectedCollaborator = computed(() => availableCollaborators.value.find(item => String(item.id) === String(form.collaborator_id)));
-watch(selectedCollaborator, collaborator => {
-    if (!collaborator || editingUser.value) return;
-    form.name = collaborator.display_name;
-    form.email = collaborator.display_email || '';
-});
-const resetForm = () => form.reset('name', 'email', 'collaborator_id', 'password', 'password_confirmation', 'pin', 'pin_confirmation', 'remove_pin');
-const openCreate = () => { editingUser.value = null; resetForm(); form.clearErrors(); showSecrets.value = false; modalStep.value = 1; modalOpen.value = true; };
+const resetForm = () => form.reset('system_role_id', 'name', 'email', 'collaborator_id', 'password', 'password_confirmation', 'pin', 'pin_confirmation', 'remove_pin');
+const openCreate = () => { editingUser.value = null; resetForm(); form.system_role_id = props.roles[0]?.id || ''; form.clearErrors(); showSecrets.value = false; modalStep.value = 1; modalOpen.value = true; };
 const openEdit = user => {
     editingUser.value = user;
     resetForm();
+    form.system_role_id = user.system_role_id || '';
     form.name = user.name;
     form.email = user.email;
     form.collaborator_id = user.seller_profile?.id || '';
@@ -42,7 +39,7 @@ const submit = () => {
     const options = { preserveScroll: true, onSuccess: () => { modalOpen.value = false; resetForm(); }, onError: errors => { modalStep.value = errors.name || errors.email || errors.collaborator_id ? 1 : 2; } };
     editingUser.value ? form.put(endpoint(props.endpoints.update, editingUser.value), options) : form.post(props.endpoints.store, options);
 };
-const canContinue = computed(() => form.name.trim() && form.email.trim());
+const canContinue = computed(() => form.system_role_id && form.name.trim() && form.email.trim());
 const nextStep = () => { if (canContinue.value) modalStep.value = 2; };
 const toggleStatus = user => {
     const action = user.is_active ? 'desactivar' : 'activar';
@@ -52,21 +49,24 @@ const toggleStatus = user => {
 </script>
 
 <template>
-    <AppLayout title="Usuarios" eyebrow="Configuración" description="Cuentas de acceso, PIN y vínculo con colaboradores.">
+    <AppLayout title="Usuarios" eyebrow="Configuración" description="Cuentas de acceso, roles, contraseña y PIN.">
+        <template v-if="mayManage" #header-actions>
+            <button type="button" class="btn-primary" @click="openCreate">+ Agregar usuario</button>
+        </template>
         <SettingsTabs :tabs="tabs" />
         <section class="grid gap-3 sm:grid-cols-3">
             <article class="card p-4"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Usuarios activos</p><p class="mt-1 text-2xl font-black">{{ users.filter(user => user.is_active).length }}</p></article>
             <article class="card p-4"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Con PIN</p><p class="mt-1 text-2xl font-black text-indigo-600">{{ users.filter(user => user.has_pin).length }}</p></article>
-            <article class="card p-4"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Colaboradores disponibles</p><p class="mt-1 text-2xl font-black text-emerald-600">{{ collaborators.filter(item => !item.user_id).length }}</p></article>
+            <article class="card p-4"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Roles disponibles</p><p class="mt-1 text-2xl font-black text-emerald-600">{{ roles.length }}</p></article>
         </section>
 
         <section class="card mt-4 overflow-hidden">
-            <div class="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center"><input v-model="search" type="search" class="control m-0 min-w-0 flex-1" placeholder="Buscar usuario…"><button type="button" class="btn-primary" @click="openCreate">Agregar usuario</button></div>
+            <div class="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center"><input v-model="search" type="search" class="control m-0 min-w-0 flex-1" placeholder="Buscar usuario…"><button v-if="mayManage" type="button" class="btn-primary sm:hidden" @click="openCreate">+ Agregar usuario</button></div>
             <div class="divide-y">
                 <article v-for="user in visibleUsers" :key="user.id" class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
                     <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-indigo-50 text-xs font-black text-indigo-600">{{ user.name.charAt(0) }}</span>
                     <div class="min-w-0 flex-1"><div class="flex items-center gap-2"><p class="truncate text-sm font-semibold">{{ user.name }}</p><span class="h-2 w-2 rounded-full" :class="user.is_active ? 'bg-emerald-500' : 'bg-slate-300'"></span></div><p class="truncate text-[11px] text-slate-400">{{ user.email }}</p></div>
-                    <div class="flex flex-wrap items-center gap-2"><span v-if="user.has_pin" class="badge bg-indigo-50 text-indigo-700">PIN</span><span v-if="user.seller_profile" class="badge bg-blue-50 text-blue-700">{{ user.seller_profile.code }}</span><span v-else class="badge bg-slate-100 text-slate-500">Administrativo</span><button type="button" class="btn-secondary" @click="openEdit(user)">Editar</button><button type="button" class="text-xs font-semibold" :class="user.is_active ? 'text-rose-600' : 'text-emerald-600'" :disabled="user.id === currentUserId" @click="toggleStatus(user)">{{ user.is_active ? 'Desactivar' : 'Activar' }}</button></div>
+                    <div class="flex flex-wrap items-center gap-2"><span v-if="user.role" class="badge bg-violet-50 text-violet-700">{{ user.role.name }}</span><span v-if="user.has_pin" class="badge bg-indigo-50 text-indigo-700">PIN</span><span v-if="user.seller_profile" class="badge bg-blue-50 text-blue-700">{{ user.seller_profile.code }}</span><span v-else class="badge bg-slate-100 text-slate-500">Administrativo</span><button v-if="mayManage" type="button" class="btn-secondary" @click="openEdit(user)">Editar</button><button v-if="mayManage" type="button" class="text-xs font-semibold" :class="user.is_active ? 'text-rose-600' : 'text-emerald-600'" :disabled="user.id === currentUserId" @click="toggleStatus(user)">{{ user.is_active ? 'Desactivar' : 'Activar' }}</button></div>
                 </article>
                 <p v-if="!visibleUsers.length" class="empty-state">No hay usuarios que coincidan con la búsqueda.</p>
             </div>
@@ -79,7 +79,7 @@ const toggleStatus = user => {
             </div>
             <form id="system-user-form" @submit.prevent="submit">
                 <section v-show="modalStep === 1" class="space-y-2.5">
-                    <label class="field-label block">Tipo de cuenta<select v-model="form.collaborator_id" class="control"><option value="">Administrativa</option><option v-for="collaborator in availableCollaborators" :key="collaborator.id" :value="collaborator.id">{{ collaborator.display_name }} · {{ collaborator.code }}</option></select></label>
+                    <label class="field-label block">Rol *<select v-model="form.system_role_id" class="control" required><option value="">Seleccionar rol</option><option v-for="role in roles" :key="role.id" :value="role.id">{{ role.name }}</option></select></label>
                     <label class="field-label block">Nombre completo *<input v-model="form.name" class="control" autocomplete="name" placeholder="Nombre del usuario" required></label>
                     <label class="field-label block">Correo electrónico *<input v-model="form.email" type="email" autocomplete="username" class="control" placeholder="usuario@financiera.com" required></label>
                     <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-[10px] leading-4 text-indigo-700">La cuenta podrá recibir permisos por módulo después de guardarla.</div>

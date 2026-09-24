@@ -6,7 +6,9 @@ import DataTable from '../../components/ui/DataTable.vue';
 import PaginationLinks from '../../components/ui/PaginationLinks.vue';
 import ResourceToolbar from '../../components/ui/ResourceToolbar.vue';
 import { useResourceFilters } from '../../composables/useResourceFilters';
+import { usePermissions } from '../../composables/usePermissions.js';
 
+const { canManage } = usePermissions();
 const props = defineProps({
     clients: Object,
     selectedClient: Object,
@@ -71,7 +73,7 @@ const loanBalance = loan => Number(loan.principal_balance || 0) + Number(loan.in
                     <h1>{{ briefing.title || 'Clientes' }}</h1>
                     <p class="mesa-situation">{{ briefing.situation }}</p>
                     <div class="mesa-actions">
-                        <Link :href="endpoints.create" class="mesa-action" data-tone="emerald">
+                        <Link v-if="canManage('clients')" :href="endpoints.create" class="mesa-action" data-tone="emerald">
                             <strong>Nuevo cliente</strong>
                             <small>Registrar expediente</small>
                         </Link>

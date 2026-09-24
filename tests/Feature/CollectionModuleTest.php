@@ -3,14 +3,19 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\CollectionAdditionalPaymentAuthorization;
+use App\Models\CollectionPaymentCorrectionAuthorization;
 use App\Models\CollectionRecord;
 use App\Models\CollectionRoute;
 use App\Models\Loan;
 use App\Models\LoanInstallment;
 use App\Models\SellerProfile;
+use App\Models\SystemModule;
+use App\Models\SystemRole;
 use App\Models\User;
 use Database\Seeders\ClientModuleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -29,6 +34,7 @@ class CollectionModuleTest extends TestCase
             ->has('pendingStops')
             ->has('paymentHistory.data')
             ->has('selectedRoute')
+            ->where('secondPaymentAuthorizationTemplate', route('collections.authorize-second-payment', ['stop' => '__STOP__']))
             ->where('storeTemplate', route('collections.store', ['stop' => '__STOP__'])));
     }
 
@@ -637,6 +643,345 @@ class CollectionModuleTest extends TestCase
         ])->assertSessionHasErrors('outcome');
 
         $this->assertSame('pending', $stop->fresh()->status);
+    }
+
+    public function test_administrator_can_correct_a_collection_amount_with_reversal_and_replacement(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $administrator = User::firstOrFail();
+        $stop = CollectionRoute::with('stops')->firstOrFail()->stops->where('status', 'pending')->firstOrFail();
+        $loan = Loan::where('client_id', $stop->client_id)->firstOrFail();
+        $balanceBefore = $loan->outstanding_balance;
+
+        $this->actingAs($administrator)->post(route('collections.store', $stop), [
+            'outcome' => 'collected',
+            'loan_id' => $loan->id,
+            'amount' => '100.00',
+            'payment_method' => 'cash',
+        ])->assertSessionHasNoErrors();
+
+        $original = CollectionRecord::with('payment.allocations')->firstOrFail();
+        $originalPayment = $original->payment;
+        $originalAllocationCount = $originalPayment->allocations->count();
+
+        $this->actingAs($administrator)->post(route('collections.authorize-correction', $original), [
+            'reason' => 'Se confirmó que el efectivo recibido fue mayor al monto digitado.',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $authorization = CollectionPaymentCorrectionAuthorization::firstOrFail();
+
+        $this->actingAs($administrator)->post(route('collections.correct-amount', $original), [
+            'amount' => '150.00',
+            'reason' => 'El gestor digitó un monto menor al efectivo recibido.',
+            'correction_authorization_id' => $authorization->id,
+        ])->assertRedirect()->assertSessionHasNoErrors()->assertSessionHas('receipt');
+
+        $replacement = $original->fresh()->correction()->with('payment')->firstOrFail();
+        $this->assertSame('150.00', (string) $replacement->amount);
+        $this->assertSame($original->id, $replacement->correction_of_id);
+        $this->assertSame($administrator->id, $replacement->corrected_by);
+        $this->assertSame('El gestor digitó un monto menor al efectivo recibido.', $replacement->correction_reason);
+        $this->assertSame('150.00', (string) $replacement->payment->amount);
+        $this->assertNotSame($originalPayment->receipt_number, $replacement->payment->receipt_number);
+        $this->assertDatabaseHas('payment_reversals', [
+            'payment_id' => $originalPayment->id,
+            'authorized_by' => $administrator->id,
+            'reason' => 'El gestor digitó un monto menor al efectivo recibido.',
+        ]);
+        $this->assertDatabaseCount('payment_allocations', $originalAllocationCount + $replacement->payment->allocations()->count());
+        $this->assertSame(bcsub($balanceBefore, '150.00', 2), $loan->fresh()->outstanding_balance);
+        $this->assertDatabaseHas('audit_events', [
+            'auditable_type' => (new CollectionRecord)->getMorphClass(),
+            'auditable_id' => $original->id,
+            'action' => 'collection.payment.amount_corrected',
+            'actor_id' => $administrator->id,
+        ]);
+
+        $this->get(route('collections.index', ['date' => today()->format('Y-m-d')]))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('collectedToday', '150.00')
+            ->where('paymentHistory.data.0.correction_of_id', $original->id)
+            ->where('paymentHistory.data.0.can_correct', true)
+            ->where('paymentHistory.data.1.payment.reversal.number', fn ($value) => filled($value))
+            ->where('paymentHistory.data.1.can_correct', false));
+    }
+
+    public function test_collection_correction_restores_and_reapplies_installment_components(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $administrator = User::firstOrFail();
+        $stop = CollectionRoute::with('stops')->firstOrFail()->stops->where('status', 'pending')->firstOrFail();
+        $loan = Loan::where('client_id', $stop->client_id)->firstOrFail();
+        $installment = $this->createInstallment($loan, 1, today(), '200.00');
+        $balanceBefore = $loan->outstanding_balance;
+
+        $this->actingAs($administrator)->post(route('collections.store', $stop), [
+            'outcome' => 'collected',
+            'loan_id' => $loan->id,
+            'amount' => '100.00',
+            'payment_method' => 'cash',
+        ])->assertSessionHasNoErrors();
+        $record = CollectionRecord::firstOrFail();
+        $this->assertSame('100.00', (string) $installment->fresh()->principal_paid);
+
+        $this->actingAs($administrator)->post(route('collections.authorize-correction', $record), [
+            'reason' => 'Se confirmó que el efectivo recibido fue mayor al monto digitado.',
+        ])->assertSessionHasNoErrors();
+        $authorization = CollectionPaymentCorrectionAuthorization::firstOrFail();
+
+        $this->actingAs($administrator)->post(route('collections.correct-amount', $record), [
+            'amount' => '150.00',
+            'reason' => 'Se confirmó el efectivo completo entregado por el cliente.',
+            'correction_authorization_id' => $authorization->id,
+        ])->assertSessionHasNoErrors();
+        $this->assertNotNull($authorization->fresh()->used_at);
+
+        $installment->refresh();
+        $this->assertSame('150.00', (string) $installment->principal_paid);
+        $this->assertSame('150.00', (string) $installment->paid_amount);
+        $this->assertSame('50.00', $installment->outstandingAmount());
+        $this->assertSame(bcsub($balanceBefore, '150.00', 2), $loan->fresh()->outstanding_balance);
+    }
+
+    public function test_correction_requires_administrator_authorization_before_a_manager_can_apply_it(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $administrator = User::firstOrFail();
+        $stop = CollectionRoute::with('stops')->firstOrFail()->stops->where('status', 'pending')->firstOrFail();
+        $loan = Loan::where('client_id', $stop->client_id)->firstOrFail();
+
+        $this->actingAs($administrator)->post(route('collections.store', $stop), [
+            'outcome' => 'collected',
+            'loan_id' => $loan->id,
+            'amount' => '100.00',
+            'payment_method' => 'cash',
+        ])->assertSessionHasNoErrors();
+        $record = CollectionRecord::firstOrFail();
+
+        $role = SystemRole::create([
+            'key' => 'collector-limited',
+            'name' => 'Gestor limitado',
+            'is_active' => true,
+        ]);
+        $module = SystemModule::where('key', 'collections')->firstOrFail();
+        DB::table('system_module_role')->insert([
+            'system_role_id' => $role->id,
+            'system_module_id' => $module->id,
+            'can_view' => true,
+            'can_manage' => true,
+            'can_full' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $limitedUser = User::factory()->create(['system_role_id' => $role->id]);
+
+        $this->actingAs($limitedUser)->post(route('collections.authorize-correction', $record), [
+            'reason' => 'Intento sin permiso administrativo.',
+        ])->assertForbidden();
+
+        $this->actingAs($limitedUser)->post(route('collections.correct-amount', $record), [
+            'amount' => '150.00',
+            'reason' => 'Intento sin autorización.',
+        ])->assertSessionHasErrors('correction_authorization_id');
+
+        $this->assertDatabaseCount('collection_payment_correction_authorizations', 0);
+        $this->assertDatabaseCount('payment_reversals', 0);
+        $this->assertDatabaseCount('collection_records', 1);
+        $this->assertSame('100.00', (string) $loan->fresh()->payments()->firstOrFail()->amount);
+    }
+
+    public function test_invalid_collection_correction_rolls_back_without_reversing_the_payment(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $administrator = User::firstOrFail();
+        $stop = CollectionRoute::with('stops')->firstOrFail()->stops->where('status', 'pending')->firstOrFail();
+        $loan = Loan::where('client_id', $stop->client_id)->firstOrFail();
+
+        $this->actingAs($administrator)->post(route('collections.store', $stop), [
+            'outcome' => 'collected',
+            'loan_id' => $loan->id,
+            'amount' => '100.00',
+            'payment_method' => 'cash',
+        ])->assertSessionHasNoErrors();
+        $record = CollectionRecord::firstOrFail();
+        $balanceAfterOriginal = $loan->fresh()->outstanding_balance;
+
+        $this->actingAs($administrator)->post(route('collections.authorize-correction', $record), [
+            'reason' => 'Se requiere revisar el monto registrado.',
+        ])->assertSessionHasNoErrors();
+        $authorization = CollectionPaymentCorrectionAuthorization::firstOrFail();
+
+        $this->actingAs($administrator)->post(route('collections.correct-amount', $record), [
+            'amount' => '100.00',
+            'reason' => 'Monto sin cambios.',
+            'correction_authorization_id' => $authorization->id,
+        ])->assertSessionHasErrors('amount');
+        $this->assertNull($authorization->fresh()->used_at);
+
+        $this->assertDatabaseCount('payment_reversals', 0);
+        $this->assertDatabaseCount('collection_records', 1);
+        $this->assertSame($balanceAfterOriginal, $loan->fresh()->outstanding_balance);
+    }
+
+    public function test_administrator_can_authorize_one_second_payment_for_the_assigned_collector(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $administrator = User::where('email', 'admin@financiera.test')->firstOrFail();
+        $route = CollectionRoute::with('collector.user', 'stops')->firstOrFail();
+        $stop = $route->stops->firstOrFail();
+        $stop->update(['status' => 'pending', 'visited_at' => null]);
+        $loan = Loan::where('client_id', $stop->client_id)->firstOrFail();
+
+        $this->actingAs($administrator)->post(route('collections.store', $stop), [
+            'outcome' => 'collected',
+            'loan_id' => $loan->id,
+            'amount' => '100.00',
+            'payment_method' => 'cash',
+        ])->assertSessionHasNoErrors();
+
+        $this->get(route('collections.index', ['date' => today()->format('Y-m-d'), 'agenda_route' => $route->id]))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('selectedRoute.stops.0.can_authorize_second_payment', true)
+            ->where('selectedRoute.stops.0.can_register_second_payment', false));
+
+        $this->post(route('collections.authorize-second-payment', $stop), [
+            'reason' => 'El cliente realizará un segundo abono durante la tarde.',
+        ])->assertSessionHasNoErrors();
+
+        $authorization = CollectionAdditionalPaymentAuthorization::firstOrFail();
+        $this->assertSame($administrator->id, $authorization->authorized_by);
+        $this->assertNull($authorization->used_at);
+
+        $collector = $route->collector->user;
+        $role = SystemRole::create([
+            'key' => 'collector-second-payment',
+            'name' => 'Gestor de segundo pago',
+            'is_active' => true,
+        ]);
+        $module = SystemModule::where('key', 'collections')->firstOrFail();
+        DB::table('system_module_role')->insert([
+            'system_role_id' => $role->id,
+            'system_module_id' => $module->id,
+            'can_view' => true,
+            'can_manage' => true,
+            'can_full' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $collector->update(['system_role_id' => $role->id]);
+
+        $this->actingAs($collector)
+            ->get(route('collections.index', ['date' => today()->format('Y-m-d'), 'agenda_route' => $route->id]))
+            ->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('selectedRoute.stops.0.can_authorize_second_payment', false)
+            ->where('selectedRoute.stops.0.can_register_second_payment', true)
+            ->where('selectedRoute.stops.0.additional_payment_authorization.id', $authorization->id));
+
+        $secondResponse = $this->actingAs($collector)->post(route('collections.store', $stop), [
+            'outcome' => 'collected',
+            'loan_id' => $loan->id,
+            'amount' => '50.00',
+            'payment_method' => 'cash',
+            'additional_payment_authorization_id' => $authorization->id,
+        ]);
+        $secondResponse->assertSessionHasNoErrors()->assertSessionHas('receipt');
+
+        $authorization->refresh();
+        $this->assertNotNull($authorization->used_at);
+        $this->assertSame($collector->id, $authorization->used_by);
+        $this->assertDatabaseCount('collection_records', 2);
+        $this->assertDatabaseCount('payments', 2);
+        $this->assertDatabaseHas('collection_records', [
+            'collection_route_stop_id' => $stop->id,
+            'additional_payment_authorization_id' => $authorization->id,
+            'amount' => '50.00',
+        ]);
+        $this->assertDatabaseHas('audit_events', [
+            'auditable_type' => $authorization->getMorphClass(),
+            'auditable_id' => $authorization->id,
+            'action' => 'collection.second_payment.authorized',
+            'actor_id' => $administrator->id,
+        ]);
+        $this->assertDatabaseHas('audit_events', [
+            'auditable_type' => $authorization->getMorphClass(),
+            'auditable_id' => $authorization->id,
+            'action' => 'collection.second_payment.used',
+            'actor_id' => $collector->id,
+        ]);
+
+        $this->actingAs($collector)->post(route('collections.store', $stop), [
+            'outcome' => 'collected',
+            'loan_id' => $loan->id,
+            'amount' => '25.00',
+            'payment_method' => 'cash',
+            'additional_payment_authorization_id' => $authorization->id,
+        ])->assertSessionHasErrors('outcome');
+
+        $this->assertDatabaseCount('collection_records', 2);
+        $this->assertDatabaseCount('payments', 2);
+        $this->assertSame('visited', $stop->fresh()->status);
+    }
+
+    public function test_second_payment_cannot_be_registered_without_administrator_authorization(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $administrator = User::where('email', 'admin@financiera.test')->firstOrFail();
+        $stop = CollectionRoute::with('stops')->firstOrFail()->stops->firstOrFail();
+        $stop->update(['status' => 'pending', 'visited_at' => null]);
+        $loan = Loan::where('client_id', $stop->client_id)->firstOrFail();
+
+        $payload = [
+            'outcome' => 'collected',
+            'loan_id' => $loan->id,
+            'amount' => '100.00',
+            'payment_method' => 'cash',
+        ];
+        $this->actingAs($administrator)->post(route('collections.store', $stop), $payload)
+            ->assertSessionHasNoErrors();
+        $this->post(route('collections.store', $stop), $payload)
+            ->assertSessionHasErrors('outcome');
+
+        $this->assertDatabaseCount('collection_records', 1);
+        $this->assertDatabaseCount('payments', 1);
+    }
+
+    public function test_user_without_full_access_cannot_authorize_a_second_payment(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $administrator = User::where('email', 'admin@financiera.test')->firstOrFail();
+        $route = CollectionRoute::with('collector.user', 'stops')->firstOrFail();
+        $stop = $route->stops->firstOrFail();
+        $stop->update(['status' => 'pending', 'visited_at' => null]);
+        $loan = Loan::where('client_id', $stop->client_id)->firstOrFail();
+        $this->actingAs($administrator)->post(route('collections.store', $stop), [
+            'outcome' => 'collected',
+            'loan_id' => $loan->id,
+            'amount' => '100.00',
+            'payment_method' => 'cash',
+        ])->assertSessionHasNoErrors();
+
+        $role = SystemRole::create([
+            'key' => 'collector-cannot-authorize',
+            'name' => 'Gestor sin autorización administrativa',
+            'is_active' => true,
+        ]);
+        $module = SystemModule::where('key', 'collections')->firstOrFail();
+        DB::table('system_module_role')->insert([
+            'system_role_id' => $role->id,
+            'system_module_id' => $module->id,
+            'can_view' => true,
+            'can_manage' => true,
+            'can_full' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $collector = $route->collector->user;
+        $collector->update(['system_role_id' => $role->id]);
+
+        $this->actingAs($collector)->post(route('collections.authorize-second-payment', $stop), [
+            'reason' => 'Intento sin permiso administrativo.',
+        ])->assertForbidden();
+
+        $this->assertDatabaseCount('collection_additional_payment_authorizations', 0);
     }
 
     private function createInstallment(Loan $loan, int $number, $dueDate, string $principal, string $interest = '0.00', array $extra = []): LoanInstallment

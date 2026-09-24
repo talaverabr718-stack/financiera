@@ -8,11 +8,11 @@ class Loan extends Model
 {
     public const COLLECTIBLE_STATUSES = ['active', 'delinquent'];
 
-    protected $fillable = ['number', 'credit_application_id', 'restructured_from_id', 'client_id', 'seller_id', 'status', 'currency', 'principal', 'principal_balance', 'interest_balance', 'fee_balance', 'delinquency_balance', 'delinquency_daily_rate', 'approved_terms', 'disbursed_at', 'maturity_date', 'closed_at'];
+    protected $fillable = ['number', 'credit_application_id', 'restructured_from_id', 'client_id', 'seller_id', 'status', 'open_guard', 'currency', 'principal', 'principal_balance', 'interest_balance', 'fee_balance', 'delinquency_balance', 'delinquency_method', 'delinquency_daily_rate', 'delinquency_fixed_amount', 'approved_terms', 'disbursed_at', 'maturity_date', 'closed_at'];
 
     protected function casts(): array
     {
-        return ['principal' => 'decimal:2', 'principal_balance' => 'decimal:2', 'interest_balance' => 'decimal:2', 'fee_balance' => 'decimal:2', 'delinquency_balance' => 'decimal:2', 'delinquency_daily_rate' => 'decimal:6', 'approved_terms' => 'array', 'disbursed_at' => 'date', 'maturity_date' => 'date', 'closed_at' => 'datetime'];
+        return ['principal' => 'decimal:2', 'principal_balance' => 'decimal:2', 'interest_balance' => 'decimal:2', 'fee_balance' => 'decimal:2', 'delinquency_balance' => 'decimal:2', 'delinquency_daily_rate' => 'decimal:6', 'delinquency_fixed_amount' => 'decimal:2', 'approved_terms' => 'array', 'disbursed_at' => 'date', 'maturity_date' => 'date', 'closed_at' => 'datetime'];
     }
 
     public function client()
@@ -87,6 +87,10 @@ class Loan extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (Loan $loan): void {
+            $loan->open_guard = in_array($loan->status, self::COLLECTIBLE_STATUSES, true) ? 'OPEN' : null;
+        });
+
         static::created(function (Loan $loan): void {
             CreditGuarantor::where('credit_application_id', $loan->credit_application_id)
                 ->where('status', 'approved')

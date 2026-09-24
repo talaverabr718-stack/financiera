@@ -2,18 +2,20 @@
 import { useForm } from '@inertiajs/vue3';
 import AppLayout from '../../Layouts/AppLayout.vue';
 import InstallmentLedger from '../../components/loans/InstallmentLedger.vue';
-
+import { usePermissions } from '../../composables/usePermissions.js';
+const { canManage } = usePermissions();
 const props = defineProps({ loan: Object, timeline: Array, delinquency: Object, endpoints: Object });
 const status = useForm({ status: props.loan.status });
 const mora = useForm({
+    method: props.delinquency?.method || 'daily_percentage',
     daily_rate: props.delinquency?.daily_rate ?? '',
+    fixed_amount: props.delinquency?.fixed_amount ?? '',
 });
 const money = value => new Intl.NumberFormat('es-NI', { style: 'currency', currency: props.loan.currency || 'NIO' }).format(Number(value || 0));
 const date = value => value ? new Intl.DateTimeFormat('es-NI', { dateStyle: 'medium' }).format(new Date(value)) : '—';
 const saveStatus = () => status.patch(props.endpoints.status, { preserveScroll: true });
 const recalculate = () => mora.post(props.endpoints.recalculate, { preserveScroll: true });
 </script>
-
 <template>
     <AppLayout :title="loan.number" eyebrow="Cartera" :description="`${loan.client.full_name} · ${loan.status}`">
         <template #header-actions>
@@ -32,17 +34,27 @@ const recalculate = () => mora.post(props.endpoints.recalculate, { preserveScrol
 
         <div class="mt-4 grid gap-4 xl:grid-cols-[1fr_320px]">
             <div class="space-y-4">
-                <form class="card p-5" @submit.prevent="recalculate">
+                <form v-if="canManage('delinquency')" class="card p-5" @submit.prevent="recalculate">
                     <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Mora</p>
                     <h2 class="mt-1 font-semibold">Recalcular mora</h2>
-                    <p class="mt-1 text-[11px] text-slate-400">El cargo se suma por cada día de atraso: saldo de la cuota × (% / 100) × días.</p>
-                    <div class="mt-4 flex flex-wrap items-end gap-3">
-                        <label class="field-label min-w-44 flex-1">% mora por día
+                    <p class="mt-1 text-[11px] text-slate-400">Elige un porcentaje diario o un único cargo fijo por cada cuota vencida.</p>
+                    <div class="mt-4 grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto]">
+                        <label class="field-label">Tipo de mora
+                            <select v-model="mora.method" class="control">
+                                <option value="daily_percentage">Porcentaje diario</option>
+                                <option value="fixed">Cargo fijo por cuota vencida</option>
+                            </select>
+                        </label>
+                        <label v-if="mora.method === 'daily_percentage'" class="field-label">% mora por día
                             <input v-model="mora.daily_rate" type="number" min="0" max="100" step="0.000001" required class="control" placeholder="Ej. 1">
+                        </label>
+                        <label v-else class="field-label">Cargo fijo
+                            <input v-model="mora.fixed_amount" type="number" min="0" step="0.01" required class="control" placeholder="Ej. 15">
                         </label>
                         <button class="btn-primary" :disabled="mora.processing">{{ mora.processing ? 'Recalculando…' : 'Recalcular' }}</button>
                     </div>
-                    <p v-if="mora.errors.daily_rate" class="mt-2 text-xs text-rose-400">{{ mora.errors.daily_rate }}</p>
+                    <p class="mt-2 text-[11px] text-slate-400">{{ mora.method === 'daily_percentage' ? 'Fórmula: saldo pendiente × porcentaje diario × días vencidos.' : 'El importe se aplica una sola vez a cada cuota vencida.' }}</p>
+                    <p v-if="Object.keys(mora.errors).length" class="mt-2 text-xs text-rose-400">{{ Object.values(mora.errors).join(' · ') }}</p>
                 </form>
 
                 <InstallmentLedger :rows="delinquency.ledger || []"/>
@@ -65,7 +77,7 @@ const recalculate = () => mora.post(props.endpoints.recalculate, { preserveScrol
                     <h2 class="mt-2 text-lg font-semibold">{{ delinquency.in_arrears ? 'En mora' : 'Al día' }}</h2>
                     <p class="mt-2 text-xs text-slate-300">{{ delinquency.current_days || 0 }} días · {{ money(loan.delinquency_balance || delinquency.total_mora || 0) }} en mora</p>
                 </section>
-                <form class="card p-5" @submit.prevent="saveStatus">
+                <form v-if="canManage('loans')" class="card p-5" @submit.prevent="saveStatus">
                     <label class="field-label">Estado
                         <select v-model="status.status" class="control">
                             <option value="active">Activo</option>
