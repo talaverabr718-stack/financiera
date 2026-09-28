@@ -29,9 +29,9 @@ class AppServiceProvider extends ServiceProvider
     {
         Vite::useHotFile(storage_path('framework/vite.hot'));
 
-        RateLimiter::for('login', function (Request $request) {
-            return Limit::perMinute(5)->by(strtolower((string) $request->input('email')).'|'.$request->ip());
-        });
+        RateLimiter::for('login', fn (Request $request) => Limit::perMinute(10)->by('login:'.$request->ip()));
+        RateLimiter::for('password-recovery', fn (Request $request) => Limit::perMinute(3)->by('password-recovery:'.$request->ip()));
+        RateLimiter::for('password-reset', fn (Request $request) => Limit::perMinute(5)->by('password-reset:'.$request->ip()));
 
         Payment::observe(PaymentObserver::class);
         PaymentReversal::observe(PaymentReversalObserver::class);

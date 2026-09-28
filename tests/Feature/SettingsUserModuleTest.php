@@ -34,16 +34,13 @@ class SettingsUserModuleTest extends TestCase
         $this->post(route('settings.users.store'), [
             'name' => 'María López',
             'email' => 'maria@financiera.test',
-            'password' => 'Segura-2026',
-            'password_confirmation' => 'Segura-2026',
-            'pin' => '4829',
-            'pin_confirmation' => '4829',
+            'password' => 'Segura-Fuerte!2026',
+            'password_confirmation' => 'Segura-Fuerte!2026',
             'collaborator_id' => $collaborator->id,
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $user = User::where('email', 'maria@financiera.test')->firstOrFail();
-        $this->assertTrue(Hash::check('Segura-2026', $user->password));
-        $this->assertTrue(Hash::check('4829', $user->pin));
+        $this->assertTrue(Hash::check('Segura-Fuerte!2026', $user->password));
         $this->assertSame($user->id, $collaborator->fresh()->user_id);
     }
 
@@ -54,13 +51,13 @@ class SettingsUserModuleTest extends TestCase
         $this->post(route('settings.users.store'), [
             'name' => 'Cuenta duplicada',
             'email' => $existing->email,
-            'password' => 'Segura-2026',
+            'password' => 'Segura-Fuerte!2026',
             'password_confirmation' => 'Diferente-2026',
         ])->assertSessionHasErrors(['email', 'password']);
     }
-    public function test_user_can_be_edited_without_replacing_existing_password_or_pin(): void
+    public function test_user_can_be_edited_without_replacing_existing_password(): void
     {
-        $user = User::factory()->create(['password' => 'Clave-original', 'pin' => '4829']);
+        $user = User::factory()->create(['password' => 'Clave-original-2026!']);
 
         $this->put(route('settings.users.update', $user), [
             'name' => 'Nombre actualizado',
@@ -69,8 +66,7 @@ class SettingsUserModuleTest extends TestCase
 
         $user->refresh();
         $this->assertSame('Nombre actualizado', $user->name);
-        $this->assertTrue(Hash::check('Clave-original', $user->password));
-        $this->assertTrue(Hash::check('4829', $user->pin));
+        $this->assertTrue(Hash::check('Clave-original-2026!', $user->password));
     }
 
     public function test_another_user_can_be_deactivated_but_current_user_cannot(): void

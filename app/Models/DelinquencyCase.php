@@ -8,7 +8,9 @@ use LogicException;
 class DelinquencyCase extends Model
 {
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_RESOLVED = 'resolved';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     protected $fillable = [

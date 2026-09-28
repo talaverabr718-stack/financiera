@@ -1,66 +1,45 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Financiera
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## Arranque seguro para producción
 
-## About Laravel
+La aplicación no crea usuarios ni datos de demostración al iniciar. Las migraciones son versionadas y solo se aplican por una acción explícita de despliegue; los reinicios normales de Docker no ejecutan seeders ni alteran datos existentes.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+1. Copia `.env.production.example` a `.env` y define valores únicos para `APP_KEY`, `DB_PASSWORD` y demás secretos. No publiques este archivo.
+2. Construye la imagen y arranca los servicios. `APP_RUN_MIGRATIONS` debe permanecer en `false` durante los reinicios normales.
+3. En una ventana administrativa controlada, ejecuta una sola vez las migraciones:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+   ```bash
+   php artisan migrate --force
+   ```
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+4. Crea el primer administrador de forma interactiva. La contraseña no se pasa como argumento ni queda en el historial del shell:
 
-## Learning Laravel
+   ```bash
+   php artisan app:create-admin administrador@dominio.com --name="Nombre Administrador"
+   ```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+El comando solo funciona si no existen usuarios y asigna el rol `administrator`. Para crear usuarios posteriores usa Configuración → Usuarios.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+## Seeders
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- `php artisan db:seed --force` ejecuta solo `ProductionSeeder`, que no crea usuarios, clientes, créditos ni movimientos.
+- Los seeders demostrativos están bloqueados cuando `APP_ENV=production`.
+- Para un entorno local o de pruebas, nunca producción:
 
-## Laravel Sponsors
+  ```bash
+  php artisan db:seed --class=Database\\Seeders\\DemoDatabaseSeeder
+  ```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## Verificación
 
-### Premium Partners
+```bash
+php artisan test --filter=ProductionBootstrapTest
+# Contra una base MySQL exclusiva de pruebas:
+DB_CONNECTION=mysql DB_DATABASE=financiera_test php artisan test --group=mysql
+```
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+Antes de desplegar, respalda MySQL, ejecuta las migraciones una sola vez desde el proceso de despliegue y comprueba `/up`.
 
-## Contributing
+## Autenticación
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+El acceso primario usa exclusivamente correo y contraseña robusta. El PIN ya no es una credencial ni se almacena. Cinco fallos consecutivos bloquean temporalmente la cuenta; los intentos posteriores aumentan el tiempo, con un máximo de quince minutos. La recuperación de contraseña desbloquea la cuenta tras usar un token de un solo uso con vigencia de 60 minutos. Los eventos se registran en `authentication_events`.

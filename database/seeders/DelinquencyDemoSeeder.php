@@ -8,13 +8,13 @@ use App\Models\Payment;
 use App\Models\PaymentAllocation;
 use App\Models\User;
 use App\Services\DelinquencyTrackingService;
-use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
-class DelinquencyDemoSeeder extends Seeder
+class DelinquencyDemoSeeder extends DemoSeeder
 {
     public function run(): void
     {
+        $this->ensureDemoEnvironment();
         $actor = User::query()->firstOrFail();
 
         Loan::query()->with('installments')->each(function (Loan $loan): void {

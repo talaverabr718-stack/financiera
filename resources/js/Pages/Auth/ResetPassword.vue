@@ -1,0 +1,7 @@
+<script setup>
+import { Head, useForm } from '@inertiajs/vue3';
+const props = defineProps({ token: String, email: String, submitUrl: String });
+const form = useForm({ token: props.token, email: props.email, password: '', password_confirmation: '' });
+const submit = () => form.post(props.submitUrl, { onFinish: () => form.reset('password', 'password_confirmation') });
+</script>
+<template><Head title="Nueva contraseña"/><main class="login-shell"><section class="login-access mx-auto"><div class="w-full max-w-md"><p class="eyebrow">Recuperación segura</p><h1 class="mt-2 text-3xl font-semibold text-slate-950">Nueva contraseña</h1><form class="mt-7 space-y-5" @submit.prevent="submit"><label class="field-label">Correo electrónico<input v-model="form.email" type="email" class="control login-control" required></label><label class="field-label">Nueva contraseña<input v-model="form.password" type="password" class="control login-control" required></label><label class="field-label">Confirmar contraseña<input v-model="form.password_confirmation" type="password" class="control login-control" required></label><p v-if="Object.keys(form.errors).length" class="text-xs text-rose-600">{{ Object.values(form.errors).join(' ') }}</p><button class="btn-primary h-12 w-full" :disabled="form.processing">Guardar contraseña</button></form></div></section></main></template>

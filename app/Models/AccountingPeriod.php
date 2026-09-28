@@ -13,7 +13,18 @@ class AccountingPeriod extends Model
         return ['starts_on' => 'date', 'ends_on' => 'date', 'closed_at' => 'datetime'];
     }
 
-    public function entries() { return $this->hasMany(JournalEntry::class); }
-    public function closedBy() { return $this->belongsTo(User::class, 'closed_by_id'); }
-    public function scopeOpen($query) { return $query->where('status', 'open'); }
+    public function entries()
+    {
+        return $this->hasMany(JournalEntry::class);
+    }
+
+    public function closedBy()
+    {
+        return $this->belongsTo(User::class, 'closed_by_id');
+    }
+
+    public function scopeOpen($query)
+    {
+        return $query->where('status', 'open');
+    }
 }

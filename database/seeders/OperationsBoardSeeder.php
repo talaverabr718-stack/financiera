@@ -16,13 +16,13 @@ use App\Models\SellerProfile;
 use App\Models\User;
 use App\Models\Zone;
 use App\Services\DelinquencyTrackingService;
-use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
-class OperationsBoardSeeder extends Seeder
+class OperationsBoardSeeder extends DemoSeeder
 {
     public function run(): void
     {
+        $this->ensureDemoEnvironment();
         $this->call(ClientModuleSeeder::class);
 
         $admin = User::query()->where('email', 'admin@financiera.test')->firstOrFail();

@@ -42,6 +42,10 @@ const initialForm = () => {
     if (props.section === 'sequences') {
         return { sequences: Object.fromEntries((props.sequences || []).map(s => [s.key, { prefix: s.prefix, padding: s.padding }])) };
     }
+    if (props.section === 'brand') {
+        const settings = { ...(props.settings || {}) };
+        return { system_name: settings.system_name || '', system_tagline: settings.system_tagline || '', logo: null, remove_logo: false, _method: 'put' };
+    }
     if (props.section === 'appearance') {
         const settings = { ...(props.settings || {}) };
         Object.entries(appearanceDefaults).forEach(([key, value]) => {
@@ -77,7 +81,9 @@ const applyTheme = theme => {
     form.put(props.update, { preserveScroll: true, preserveState: true });
 };
 
-const save = (files = false) => form.put(props.update, { forceFormData: files, preserveScroll: true });
+const save = (files = false) => files
+    ? form.post(props.update, { forceFormData: true, preserveScroll: true })
+    : form.put(props.update, { preserveScroll: true });
 const fields = {
     general: [['institution_name', 'Nombre de la institución'], ['legal_name', 'Razón social'], ['tax_id', 'Identificación tributaria'], ['phone', 'Teléfono'], ['email', 'Correo'], ['address', 'Dirección']],
     appearance: [['primary_color', 'Color principal', 'color'], ['sidebar_color', 'Barra lateral', 'color'], ['accent_color', 'Acento', 'color'], ['background_color', 'Fondo', 'color']],

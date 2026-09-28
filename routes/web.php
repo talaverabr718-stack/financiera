@@ -6,6 +6,7 @@ use App\Http\Controllers\AccountingPeriodController;
 use App\Http\Controllers\AccountingReportController;
 use App\Http\Controllers\AmortizationCalculatorController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CollaboratorController;
 use App\Http\Controllers\CollectionController;
@@ -33,6 +34,10 @@ Route::middleware('guest')->group(function () {
     Route::post('/ingresar', [AuthenticatedSessionController::class, 'store'])
         ->middleware('throttle:login')
         ->name('login.store');
+    Route::get('/recuperar-acceso', [PasswordResetController::class, 'create'])->name('password.request');
+    Route::post('/recuperar-acceso', [PasswordResetController::class, 'store'])->middleware('throttle:password-recovery')->name('password.email');
+    Route::get('/restablecer-contrasena/{token}', [PasswordResetController::class, 'edit'])->name('password.reset');
+    Route::post('/restablecer-contrasena', [PasswordResetController::class, 'update'])->middleware('throttle:password-reset')->name('password.update');
 });
 
 Route::middleware('auth')->group(function () {

@@ -51,6 +51,7 @@ const shellStyle = computed(() => ({
 const syncSearch = () => {
     searchTerm.value = new URLSearchParams(page.url.split('?')[1] || '').get('q') || '';
 };
+const logout = () => router.post('/salir');
 const submitSearch = event => {
     event.preventDefault();
     router.get(page.props.routes.search, { q: searchTerm.value.trim() });
@@ -97,7 +98,7 @@ watch(() => page.url, syncSearch);
                     <Link href="/configuracion/apariencia" class="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700" title="Personalizar mi apariencia">
                         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 1 0 0 18h1.5a1.5 1.5 0 0 0 1.25-2.33l-.3-.45a1.5 1.5 0 0 1 1.25-2.33H18A3 3 0 0 0 21 13a10 10 0 0 0-9-10Z" /><path stroke-linecap="round" d="M7.5 10.5h.01M9.5 6.8h.01M14.5 7.2h.01M17 11.5h.01" /></svg>
                         <span class="hidden 2xl:inline">Mi apariencia</span>
-                    </Link>                    <button type="button" class="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600" title="Cerrar sesión" @click="router.post(page.props.routes.logout)"><span class="hidden sm:inline">Salir</span><span class="sm:hidden">↪</span></button>
+                    </Link>                    <button type="button" class="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600" title="Cerrar sesión" @click="logout"><span class="hidden sm:inline">Salir</span><span class="sm:hidden">↪</span></button>
                 </div>
             </header>
             <div class="mx-auto max-w-[1720px] p-4 sm:p-5 lg:p-6">

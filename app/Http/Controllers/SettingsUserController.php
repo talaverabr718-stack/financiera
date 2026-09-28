@@ -18,7 +18,7 @@ class SettingsUserController extends Controller
     public function index()
     {
         return Inertia::render('Settings/Users', [
-            'users' => User::with(['role', 'sellerProfile.branch'])->orderByDesc('is_active')->orderBy('name')->get()->map(fn (User $user) => $user->append('has_pin')),
+            'users' => User::with(['role', 'sellerProfile.branch'])->orderByDesc('is_active')->orderBy('name')->get(),
             'roles' => SystemRole::where('is_active', true)->orderByDesc('is_system')->orderBy('name')->get(['id', 'name']),
             'collaborators' => SellerProfile::with('branch')->where(fn ($query) => $query->whereNull('user_id')->orWhereIn('user_id', User::pluck('id')))->where('status', 'active')->orderBy('full_name')->get(),
             'currentUserId' => auth()->id(),

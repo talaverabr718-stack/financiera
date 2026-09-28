@@ -25,5 +25,8 @@ class JournalEntryLine extends Model
         return $this->belongsTo(Account::class);
     }
 
-    public function costCenter() { return $this->belongsTo(CostCenter::class); }
+    public function costCenter()
+    {
+        return $this->belongsTo(CostCenter::class);
+    }
 }

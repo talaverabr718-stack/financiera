@@ -9,7 +9,7 @@ Requisitos: Linux actualizado, Nginx, PHP 8.2 o superior con FPM y extensiones d
 5. Adaptar e instalar `nginx.conf.example` y emitir el certificado TLS con Certbot.
 6. Adaptar e instalar `supervisor-financiera.conf.example`; ejecutar `supervisorctl reread`, `update` y `start financiera-worker:*`.
 7. Ejecutar `APP_DIR=/var/www/financiera/current bash deployment/deploy.sh`.
-8. Crear el primer usuario con `php artisan app:create-admin administrador@dominio.com`.
+8. Crear el primer usuario con `php artisan app:create-admin administrador@dominio.com --name="Nombre Administrador"`. El comando solicita la contraseña de forma oculta y solo funciona si no existen usuarios.
 9. Configurar cron: `* * * * * cd /var/www/financiera/current && php artisan schedule:run >> /dev/null 2>&1`.
 
-No ejecutar `db:seed` en producción: los seeders contienen información demostrativa. Antes de cada despliegue se debe generar un respaldo consistente de MySQL y verificar `/up` después de publicar.
+No ejecutar seeders demostrativos en producción. `db:seed` usa únicamente el seeder estructural vacío y los datos demo están bloqueados por entorno. Antes de cada despliegue se debe generar un respaldo consistente de MySQL y verificar `/up` después de publicar.

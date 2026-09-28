@@ -7,10 +7,10 @@ use Illuminate\Database\Seeder;
 class DatabaseSeeder extends Seeder
 {
     /**
-     * Seed the application's database.
+     * El seeder por defecto es seguro para producción y no incorpora datos demostrativos.
      */
     public function run(): void
     {
-        $this->call(OperationsBoardSeeder::class);
+        $this->call(ProductionSeeder::class);
     }
 }

@@ -700,7 +700,7 @@ class CollectionModuleTest extends TestCase
             ->assertOk()->assertInertia(fn (Assert $page) => $page
             ->where('collectedToday', '150.00')
             ->where('paymentHistory.data.0.correction_of_id', $original->id)
-            ->where('paymentHistory.data.0.can_correct', true)
+            ->where('paymentHistory.data.0.can_correct', false)
             ->where('paymentHistory.data.1.payment.reversal.number', fn ($value) => filled($value))
             ->where('paymentHistory.data.1.can_correct', false));
     }

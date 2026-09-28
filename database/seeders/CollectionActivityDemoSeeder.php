@@ -8,13 +8,13 @@ use App\Models\CollectionRoute;
 use App\Models\Loan;
 use App\Models\SellerProfile;
 use App\Models\User;
-use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
-class CollectionActivityDemoSeeder extends Seeder
+class CollectionActivityDemoSeeder extends DemoSeeder
 {
     public function run(): void
     {
+        $this->ensureDemoEnvironment();
         $admin = User::query()->where('email', 'admin@financiera.test')->first() ?? User::query()->firstOrFail();
         $clients = Client::query()->orderBy('id')->get();
         $loans = Loan::query()->get()->keyBy('client_id');

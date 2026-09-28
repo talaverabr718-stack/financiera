@@ -14,12 +14,12 @@ const showSecrets = ref(false);
 const modalStep = ref(1);
 const { canFull } = usePermissions();
 const mayManage = computed(() => canFull('settings'));
-const form = useForm({ system_role_id: '', name: '', email: '', collaborator_id: '', password: '', password_confirmation: '', pin: '', pin_confirmation: '', remove_pin: false });
+const form = useForm({ system_role_id: '', name: '', email: '', collaborator_id: '', password: '', password_confirmation: '' });
 const visibleUsers = computed(() => {
     const term = search.value.trim().toLocaleLowerCase('es');
     return term ? props.users.filter(user => `${user.name} ${user.email} ${user.seller_profile?.code || ''}`.toLocaleLowerCase('es').includes(term)) : props.users;
 });
-const resetForm = () => form.reset('system_role_id', 'name', 'email', 'collaborator_id', 'password', 'password_confirmation', 'pin', 'pin_confirmation', 'remove_pin');
+const resetForm = () => form.reset('system_role_id', 'name', 'email', 'collaborator_id', 'password', 'password_confirmation');
 const openCreate = () => { editingUser.value = null; resetForm(); form.system_role_id = props.roles[0]?.id || ''; form.clearErrors(); showSecrets.value = false; modalStep.value = 1; modalOpen.value = true; };
 const openEdit = user => {
     editingUser.value = user;
@@ -49,14 +49,14 @@ const toggleStatus = user => {
 </script>
 
 <template>
-    <AppLayout title="Usuarios" eyebrow="Configuración" description="Cuentas de acceso, roles, contraseña y PIN.">
+    <AppLayout title="Usuarios" eyebrow="Configuración" description="Cuentas de acceso, roles y contraseñas robustas.">
         <template v-if="mayManage" #header-actions>
             <button type="button" class="btn-primary" @click="openCreate">+ Agregar usuario</button>
         </template>
         <SettingsTabs :tabs="tabs" />
         <section class="grid gap-3 sm:grid-cols-3">
             <article class="card p-4"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Usuarios activos</p><p class="mt-1 text-2xl font-black">{{ users.filter(user => user.is_active).length }}</p></article>
-            <article class="card p-4"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Con PIN</p><p class="mt-1 text-2xl font-black text-indigo-600">{{ users.filter(user => user.has_pin).length }}</p></article>
+            <article class="card p-4"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Acceso primario</p><p class="mt-1 text-2xl font-black text-indigo-600">Correo + contraseña</p></article>
             <article class="card p-4"><p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Roles disponibles</p><p class="mt-1 text-2xl font-black text-emerald-600">{{ roles.length }}</p></article>
         </section>
 
@@ -66,7 +66,7 @@ const toggleStatus = user => {
                 <article v-for="user in visibleUsers" :key="user.id" class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
                     <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-indigo-50 text-xs font-black text-indigo-600">{{ user.name.charAt(0) }}</span>
                     <div class="min-w-0 flex-1"><div class="flex items-center gap-2"><p class="truncate text-sm font-semibold">{{ user.name }}</p><span class="h-2 w-2 rounded-full" :class="user.is_active ? 'bg-emerald-500' : 'bg-slate-300'"></span></div><p class="truncate text-[11px] text-slate-400">{{ user.email }}</p></div>
-                    <div class="flex flex-wrap items-center gap-2"><span v-if="user.role" class="badge bg-violet-50 text-violet-700">{{ user.role.name }}</span><span v-if="user.has_pin" class="badge bg-indigo-50 text-indigo-700">PIN</span><span v-if="user.seller_profile" class="badge bg-blue-50 text-blue-700">{{ user.seller_profile.code }}</span><span v-else class="badge bg-slate-100 text-slate-500">Administrativo</span><button v-if="mayManage" type="button" class="btn-secondary" @click="openEdit(user)">Editar</button><button v-if="mayManage" type="button" class="text-xs font-semibold" :class="user.is_active ? 'text-rose-600' : 'text-emerald-600'" :disabled="user.id === currentUserId" @click="toggleStatus(user)">{{ user.is_active ? 'Desactivar' : 'Activar' }}</button></div>
+                    <div class="flex flex-wrap items-center gap-2"><span v-if="user.role" class="badge bg-violet-50 text-violet-700">{{ user.role.name }}</span><span v-if="user.seller_profile" class="badge bg-blue-50 text-blue-700">{{ user.seller_profile.code }}</span><span v-else class="badge bg-slate-100 text-slate-500">Administrativo</span><button v-if="mayManage" type="button" class="btn-secondary" @click="openEdit(user)">Editar</button><button v-if="mayManage" type="button" class="text-xs font-semibold" :class="user.is_active ? 'text-rose-600' : 'text-emerald-600'" :disabled="user.id === currentUserId" @click="toggleStatus(user)">{{ user.is_active ? 'Desactivar' : 'Activar' }}</button></div>
                 </article>
                 <p v-if="!visibleUsers.length" class="empty-state">No hay usuarios que coincidan con la búsqueda.</p>
             </div>
@@ -75,7 +75,7 @@ const toggleStatus = user => {
         <BaseModal :open="modalOpen" :title="editingUser ? 'Editar usuario' : 'Nuevo usuario'" :description="modalStep === 1 ? 'Identidad de la cuenta' : 'Métodos de acceso'" size="user-access-modal" compact @close="closeModal">
             <div class="mb-3 grid grid-cols-2 gap-1.5 rounded-xl bg-slate-100 p-1">
                 <button type="button" class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[10px] font-bold transition" :class="modalStep === 1 ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-400'" @click="modalStep = 1"><span class="grid h-5 w-5 place-items-center rounded-full" :class="modalStep === 1 ? 'bg-indigo-600 text-white' : 'bg-slate-200'">1</span><span><strong class="block">Perfil</strong><small class="font-normal">Datos básicos</small></span></button>
-                <button type="button" class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[10px] font-bold transition" :class="modalStep === 2 ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-400'" :disabled="!canContinue" @click="nextStep"><span class="grid h-5 w-5 place-items-center rounded-full" :class="modalStep === 2 ? 'bg-indigo-600 text-white' : 'bg-slate-200'">2</span><span><strong class="block">Acceso</strong><small class="font-normal">Clave y PIN</small></span></button>
+                <button type="button" class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[10px] font-bold transition" :class="modalStep === 2 ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-400'" :disabled="!canContinue" @click="nextStep"><span class="grid h-5 w-5 place-items-center rounded-full" :class="modalStep === 2 ? 'bg-indigo-600 text-white' : 'bg-slate-200'">2</span><span><strong class="block">Acceso</strong><small class="font-normal">Contraseña</small></span></button>
             </div>
             <form id="system-user-form" @submit.prevent="submit">
                 <section v-show="modalStep === 1" class="space-y-2.5">
@@ -87,12 +87,11 @@ const toggleStatus = user => {
                 <section v-show="modalStep === 2" class="space-y-2.5">
                     <div class="rounded-xl border bg-slate-50 p-2.5"><div class="flex items-center gap-2.5"><span class="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-xs font-black text-white">{{ form.name.charAt(0) || 'U' }}</span><div class="min-w-0"><p class="truncate text-xs font-semibold">{{ form.name }}</p><p class="truncate text-[10px] text-slate-400">{{ form.email }}</p></div></div></div>
                     <div class="grid grid-cols-2 gap-2">
-                        <label class="field-label">{{ editingUser ? 'Nueva contraseña' : 'Contraseña *' }}<input v-model="form.password" :type="showSecrets ? 'text' : 'password'" autocomplete="new-password" class="control" minlength="8" :required="!editingUser"></label>
-                        <label class="field-label">Confirmar<input v-model="form.password_confirmation" :type="showSecrets ? 'text' : 'password'" autocomplete="new-password" class="control" minlength="8" :required="!editingUser"></label>
-                        <label class="field-label">PIN de 4 dígitos<input v-model="form.pin" :type="showSecrets ? 'text' : 'password'" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" class="control text-center tracking-[.35em]" placeholder="••••"></label>
-                        <label class="field-label">Confirmar PIN<input v-model="form.pin_confirmation" :type="showSecrets ? 'text' : 'password'" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" class="control text-center tracking-[.35em]" placeholder="••••"></label>
+                        <label class="field-label">{{ editingUser ? 'Nueva contraseña' : 'Contraseña *' }}<input v-model="form.password" :type="showSecrets ? 'text' : 'password'" autocomplete="new-password" class="control" minlength="12" :required="!editingUser"></label>
+                        <label class="field-label">Confirmar<input v-model="form.password_confirmation" :type="showSecrets ? 'text' : 'password'" autocomplete="new-password" class="control" minlength="12" :required="!editingUser"></label>
+
                     </div>
-                    <div class="flex flex-wrap justify-between gap-2"><label class="flex items-center gap-2 text-[10px] text-slate-500"><input v-model="showSecrets" type="checkbox"> Mostrar claves</label><label v-if="editingUser?.has_pin" class="flex items-center gap-2 text-[10px] text-rose-600"><input v-model="form.remove_pin" type="checkbox"> Quitar PIN</label></div>
+                    <div class="flex flex-wrap justify-between gap-2"><label class="flex items-center gap-2 text-[10px] text-slate-500"><input v-model="showSecrets" type="checkbox"> Mostrar contraseña</label><span class="text-[10px] text-slate-400">Mínimo 12 caracteres, mayúscula, minúscula, número y símbolo.</span></div>
                     <p v-if="editingUser" class="text-[10px] text-slate-400">Los campos vacíos conservan las credenciales actuales.</p>
                 </section>
                 <div v-if="Object.keys(form.errors).length" class="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-[10px] text-rose-700"><p v-for="(error, key) in form.errors" :key="key">{{ error }}</p></div>

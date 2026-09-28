@@ -7,13 +7,13 @@ use App\Models\ClientPortfolioAssignment;
 use App\Models\SellerProfile;
 use App\Models\User;
 use App\Services\DocumentSequenceService;
-use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
-class PortfolioAccessDemoSeeder extends Seeder
+class PortfolioAccessDemoSeeder extends DemoSeeder
 {
     public function run(): void
     {
+        $this->ensureDemoEnvironment();
         $actor = User::query()->where('email', 'admin@financiera.test')->firstOrFail();
         $sellers = SellerProfile::query()
             ->with('user')

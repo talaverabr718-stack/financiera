@@ -35,6 +35,7 @@ class SellerProfile extends Model
     {
         return $this->email ?: $this->user?->email;
     }
+
     protected static function booted(): void
     {
         static::creating(function (SellerProfile $profile): void {

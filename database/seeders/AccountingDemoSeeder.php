@@ -8,12 +8,12 @@ use App\Models\CostCenter;
 use App\Models\JournalEntry;
 use App\Models\User;
 use App\Services\AuditService;
-use Illuminate\Database\Seeder;
 
-class AccountingDemoSeeder extends Seeder
+class AccountingDemoSeeder extends DemoSeeder
 {
     public function run(): void
     {
+        $this->ensureDemoEnvironment();
         $user = User::query()->where('email', 'admin@financiera.test')->first() ?? User::query()->firstOrFail();
         $accounts = collect([
             ['1101', 'Caja general', 'asset_current'], ['1102', 'Bancos moneda nacional', 'asset_current'],
@@ -24,6 +24,7 @@ class AccountingDemoSeeder extends Seeder
         ])->mapWithKeys(function (array $row) {
             [$code, $name, $type] = $row;
             $account = Account::query()->updateOrCreate(['code' => $code], ['name' => $name, 'description' => 'Cuenta demostrativa configurable', 'type' => $type, 'nature' => Account::NATURE_BY_TYPE[$type], 'level' => 1, 'is_postable' => true, 'is_active' => true]);
+
             return [$code => $account];
         });
 
@@ -37,7 +38,9 @@ class AccountingDemoSeeder extends Seeder
         foreach ([2, 1, 0] as $monthsAgo) {
             $month = today()->subMonthsNoOverflow($monthsAgo);
             $period = AccountingPeriod::query()->firstOrCreate(['starts_on' => $month->copy()->startOfMonth()], ['name' => $month->translatedFormat('F Y'), 'ends_on' => $month->copy()->endOfMonth(), 'status' => 'open']);
-            if ($period->status !== 'open') continue;
+            if ($period->status !== 'open') {
+                continue;
+            }
             $prefix = 'DEM-'.$month->format('Ym').'-';
             $samples = [
                 ['001', 2, 'Aporte operativo a bancos', 'internal_support', 'AP-'.$month->format('Ym'), null, null, '1102', '3101', '125000.00', 'CJA'],
@@ -48,11 +51,15 @@ class AccountingDemoSeeder extends Seeder
                 ['006', 21, 'Gastos administrativos del período', 'internal_support', 'GAD-'.$month->format('Ym'), null, null, '5101', '1102', '12400.00', 'ADM'],
                 ['007', 24, 'Comisión bancaria', 'bank_document', 'NDB-'.$month->format('Ym').'-02', 'Banco demostrativo', null, '5104', '1102', '985.00', 'CJA'],
             ];
-            foreach ($samples as $sample) $this->entry($prefix.$sample[0], $period, $month->copy()->day(min($sample[1], $month->daysInMonth)), $sample, $accounts, $centers, $user, 'posted');
+            foreach ($samples as $sample) {
+                $this->entry($prefix.$sample[0], $period, $month->copy()->day(min($sample[1], $month->daysInMonth)), $sample, $accounts, $centers, $user, 'posted');
+            }
         }
 
         $current = AccountingPeriod::query()->whereDate('starts_on', today()->startOfMonth())->firstOrFail();
-        if ($current->status !== 'open') return;
+        if ($current->status !== 'open') {
+            return;
+        }
         $draft = ['008', min(today()->day, 26), 'Provisión pendiente de revisión', 'internal_support', 'PROV-'.today()->format('Ym'), null, null, '5101', '2101', '8300.00', 'ADM'];
         $this->entry('DEM-'.today()->format('Ym').'-008', $current, today(), $draft, $accounts, $centers, $user, 'draft');
 
@@ -73,6 +80,7 @@ class AccountingDemoSeeder extends Seeder
         $entry = JournalEntry::query()->updateOrCreate(['number' => $number], ['date' => $date, 'accounting_period_id' => $period->id, 'concept' => $concept, 'reference' => 'Escenario demostrativo', 'document_type' => $documentType, 'document_number' => $documentNumber, 'counterparty_name' => $counterparty, 'counterparty_ruc' => $ruc, 'status' => $status, 'total_debit' => $amount, 'total_credit' => $amount, 'reversal_of_id' => $reversalOf, 'user_id' => $user->id, 'posted_by_id' => $status === 'draft' ? null : $user->id, 'posted_at' => $status === 'draft' ? null : now(), 'notes' => 'Registro generado exclusivamente para demostración funcional.']);
         $entry->lines()->updateOrCreate(['detail' => 'Debe · '.$number], ['account_id' => $accounts[$debitCode]->id, 'cost_center_id' => $centers[$centerCode]->id, 'debit' => $amount, 'credit' => '0.00']);
         $entry->lines()->updateOrCreate(['detail' => 'Haber · '.$number], ['account_id' => $accounts[$creditCode]->id, 'cost_center_id' => $centers[$centerCode]->id, 'debit' => '0.00', 'credit' => $amount]);
+
         return $entry;
     }
 }

@@ -3,9 +3,9 @@
 namespace App\Http\Requests;
 
 use Carbon\Carbon;
-use Illuminate\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class CollectionRouteRequest extends FormRequest
 {

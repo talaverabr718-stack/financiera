@@ -23,9 +23,20 @@ class JournalEntry extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function postedBy() { return $this->belongsTo(User::class, 'posted_by_id'); }
-    public function accountingPeriod() { return $this->belongsTo(AccountingPeriod::class); }
-    public function auditEvents() { return $this->morphMany(AuditEvent::class, 'auditable'); }
+    public function postedBy()
+    {
+        return $this->belongsTo(User::class, 'posted_by_id');
+    }
+
+    public function accountingPeriod()
+    {
+        return $this->belongsTo(AccountingPeriod::class);
+    }
+
+    public function auditEvents()
+    {
+        return $this->morphMany(AuditEvent::class, 'auditable');
+    }
 
     public function reversalOf()
     {

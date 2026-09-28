@@ -19,7 +19,6 @@ class SettingsUserService
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'password' => $data['password'],
-                'pin' => $data['pin'] ?? null,
                 'is_active' => true,
             ]);
             $collaborator?->update(['user_id' => $user->id]);
@@ -46,8 +45,6 @@ class SettingsUserService
             $values = ['name' => $data['name'], 'email' => $data['email']];
             if (! empty($data['system_role_id'])) $values['system_role_id'] = $data['system_role_id'];
             if (! empty($data['password'])) $values['password'] = $data['password'];
-            if (! empty($data['pin'])) $values['pin'] = $data['pin'];
-            if (! empty($data['remove_pin'])) $values['pin'] = null;
             $locked->update($values);
 
             return $locked->fresh('sellerProfile.branch');

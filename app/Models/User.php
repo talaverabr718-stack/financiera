@@ -12,23 +12,19 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
-    protected $fillable = ['system_role_id', 'name', 'email', 'password', 'pin', 'is_active'];
+    protected $fillable = ['system_role_id', 'name', 'email', 'password', 'is_active', 'failed_login_attempts', 'locked_until', 'last_login_at', 'last_login_ip'];
 
-    protected $hidden = ['password', 'pin', 'remember_token'];
+    protected $hidden = ['password', 'remember_token'];
 
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'pin' => 'hashed',
             'is_active' => 'boolean',
+            'locked_until' => 'datetime',
+            'last_login_at' => 'datetime',
         ];
-    }
-
-    public function getHasPinAttribute(): bool
-    {
-        return filled($this->pin);
     }
 
     public function sellerProfile()
@@ -51,5 +47,10 @@ class User extends Authenticatable
     public function appearancePreference()
     {
         return $this->hasOne(UserAppearancePreference::class);
+    }
+
+    public function authenticationEvents()
+    {
+        return $this->hasMany(AuthenticationEvent::class);
     }
 }
