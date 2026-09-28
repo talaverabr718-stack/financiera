@@ -703,6 +703,14 @@ class CollectionModuleTest extends TestCase
             ->where('paymentHistory.data.0.can_correct', false)
             ->where('paymentHistory.data.1.payment.reversal.number', fn ($value) => filled($value))
             ->where('paymentHistory.data.1.can_correct', false));
+
+        $this->actingAs($administrator)->post(route('collections.correct-amount', $original), [
+            'amount' => '175.00',
+            'reason' => 'Intento de reutilizar una autorización consumida.',
+            'correction_authorization_id' => $authorization->id,
+        ])->assertSessionHasErrors('amount');
+        $this->assertDatabaseCount('payment_reversals', 1);
+        $this->assertDatabaseCount('collection_records', 2);
     }
 
     public function test_collection_correction_restores_and_reapplies_installment_components(): void

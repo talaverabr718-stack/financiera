@@ -25,7 +25,7 @@ class CreditGuarantorWorkflowTest extends TestCase
         return [
             'client_id' => Client::firstOrFail()->id, 'seller_id' => SellerProfile::firstOrFail()->id,
             'credit_product_id' => CreditProduct::firstOrFail()->id, 'requested_amount' => '10000.00',
-            'currency' => 'NIO', 'purpose' => 'Capital de trabajo', 'term' => 12,
+            'currency' => 'NIO', 'purpose' => 'Capital de trabajo', 'term_value' => 12, 'term_unit' => 'monthly', 'interest_rate' => '16.000000',
             'payment_frequency' => 'weekly', 'status' => 'draft', 'requires_guarantor' => $requires ? '1' : '0',
             'guarantors' => $guarantors,
         ];
@@ -106,5 +106,19 @@ class CreditGuarantorWorkflowTest extends TestCase
         $this->actingAs($user)->patch(route('guarantees.release', $guarantee), ['reason' => 'Liberación excepcional', 'authorized_release' => '1'])->assertSessionHasNoErrors();
         $this->assertSame('released', $guarantee->fresh()->status);
         $this->assertNotNull($guarantee->fresh()->released_by);
+    }
+    public function test_credit_application_rejects_legacy_term_when_current_term_contract_is_missing(): void
+    {
+        $this->seed(ClientModuleSeeder::class);
+        $this->cancelOpenCredits();
+
+        $initialApplications = CreditApplication::count();
+        $payload = $this->payload();
+        unset($payload['term_value'], $payload['term_unit'], $payload['interest_rate']);
+        $payload['term'] = 12;
+
+        $this->post(route('applications.store'), $payload)
+            ->assertSessionHasErrors(['term_value', 'term_unit', 'interest_rate']);
+        $this->assertSame($initialApplications, CreditApplication::count());
     }
 }
