@@ -41,6 +41,7 @@ class CollaboratorController extends Controller
     public function create()
     {
         $this->portfolioAccess->authorizeGlobal(request()->user());
+
         return $this->form(new SellerProfile);
     }
 
@@ -63,6 +64,7 @@ class CollaboratorController extends Controller
     public function edit(SellerProfile $collaborator)
     {
         $this->portfolioAccess->authorizeSellerId(request()->user(), (int) $collaborator->id);
+
         return $this->form($collaborator->load('user'));
     }
 

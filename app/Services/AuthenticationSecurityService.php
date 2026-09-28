@@ -11,7 +11,9 @@ class AuthenticationSecurityService
     public function isLocked(User $user, Request $request): bool
     {
         if (! $user->locked_until || ! $user->locked_until->isFuture()) {
-            if ($user->locked_until) $user->update(['locked_until' => null]);
+            if ($user->locked_until) {
+                $user->update(['locked_until' => null]);
+            }
 
             return false;
         }
@@ -32,7 +34,9 @@ class AuthenticationSecurityService
         $attempts = $user->failed_login_attempts + 1;
         $seconds = $this->lockSeconds($attempts);
         $values = ['failed_login_attempts' => $attempts];
-        if ($seconds) $values['locked_until'] = now()->addSeconds($seconds);
+        if ($seconds) {
+            $values['locked_until'] = now()->addSeconds($seconds);
+        }
         $user->update($values);
 
         $metadata = [
@@ -40,7 +44,9 @@ class AuthenticationSecurityService
             'locked_until' => $seconds ? $user->fresh()->locked_until?->toISOString() : null,
         ];
         $this->record('invalid_credentials', $request, $user, $metadata);
-        if ($seconds) $this->record('temporarily_locked', $request, $user, $metadata);
+        if ($seconds) {
+            $this->record('temporarily_locked', $request, $user, $metadata);
+        }
     }
 
     public function successfulLogin(User $user, Request $request): void

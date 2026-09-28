@@ -39,12 +39,18 @@ class SettingsUserService
                     throw ValidationException::withMessages(['collaborator_id' => 'El colaborador ya tiene otra cuenta de usuario.']);
                 }
             }
-            if ($currentProfile && $currentProfile->isNot($targetProfile)) $currentProfile->update(['user_id' => null]);
+            if ($currentProfile && $currentProfile->isNot($targetProfile)) {
+                $currentProfile->update(['user_id' => null]);
+            }
             $targetProfile?->update(['user_id' => $locked->id]);
 
             $values = ['name' => $data['name'], 'email' => $data['email']];
-            if (! empty($data['system_role_id'])) $values['system_role_id'] = $data['system_role_id'];
-            if (! empty($data['password'])) $values['password'] = $data['password'];
+            if (! empty($data['system_role_id'])) {
+                $values['system_role_id'] = $data['system_role_id'];
+            }
+            if (! empty($data['password'])) {
+                $values['password'] = $data['password'];
+            }
             $locked->update($values);
 
             return $locked->fresh('sellerProfile.branch');
@@ -59,13 +65,17 @@ class SettingsUserService
 
         DB::transaction(function () use ($user, $active): void {
             User::lockForUpdate()->findOrFail($user->id)->update(['is_active' => $active]);
-            if (! $active) DB::table('sessions')->where('user_id', $user->id)->delete();
+            if (! $active) {
+                DB::table('sessions')->where('user_id', $user->id)->delete();
+            }
         });
     }
 
     private function availableCollaborator(mixed $id): ?SellerProfile
     {
-        if (empty($id)) return null;
+        if (empty($id)) {
+            return null;
+        }
         $collaborator = SellerProfile::lockForUpdate()->findOrFail($id);
         if ($collaborator->user_id) {
             throw ValidationException::withMessages(['collaborator_id' => 'El colaborador ya tiene una cuenta de usuario.']);

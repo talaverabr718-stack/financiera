@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Loan;
 use App\Services\DelinquencyTrackingService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -19,7 +20,7 @@ class RecalculateDelinquencyCases extends Command
             : $delinquency->calendarDate(now());
 
         if ($loanId = $this->option('loan')) {
-            $loan = \App\Models\Loan::findOrFail($loanId);
+            $loan = Loan::findOrFail($loanId);
             $delinquency->recalculateLoan($loan, $asOf, ['trigger' => 'manual']);
             $this->info("Mora recalculada para el crédito {$loan->number} al {$asOf->toDateString()}.");
 

@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
-use App\Models\Loan;
 use App\Models\Payment;
 use App\Models\User;
 use Database\Seeders\ClientModuleSeeder;
@@ -74,6 +73,6 @@ class CreditHistoryModuleTest extends TestCase
 
         $this->get(route('applications.create', ['client_id' => $client->id]))
             ->assertOk()->assertInertia(fn (Assert $page) => $page
-                ->component('Applications/Form')->where('application.client_id', $client->id));
+            ->component('Applications/Form')->where('application.client_id', $client->id));
     }
 }

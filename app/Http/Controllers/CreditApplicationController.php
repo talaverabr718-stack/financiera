@@ -63,6 +63,7 @@ class CreditApplicationController extends Controller
     public function edit(CreditApplication $application)
     {
         $this->portfolioAccess->authorizeClientId(request()->user(), (int) $application->client_id);
+
         return $this->form($application);
     }
 

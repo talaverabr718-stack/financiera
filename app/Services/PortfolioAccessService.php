@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Client;
 use App\Models\ClientPortfolioAssignment;
-use App\Models\SellerProfile;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 

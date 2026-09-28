@@ -55,7 +55,7 @@ class CreditHistoryController extends Controller
         $withHistory = (clone $base)->has('loans')->count();
         $situation = $withHistory === 0
             ? 'Todavía no hay historial crediticio para mostrar.'
-            : "{$withHistory} cliente".($withHistory === 1 ? '' : 's')." con créditos · {$open} con crédito vigente · {$unlocked} desbloqueado".($unlocked === 1 ? '' : 's')." para un nuevo crédito";
+            : "{$withHistory} cliente".($withHistory === 1 ? '' : 's')." con créditos · {$open} con crédito vigente · {$unlocked} desbloqueado".($unlocked === 1 ? '' : 's').' para un nuevo crédito';
 
         return Inertia::render('CreditHistory/Index', [
             'clients' => $clients,

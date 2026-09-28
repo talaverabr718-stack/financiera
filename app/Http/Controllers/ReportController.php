@@ -9,8 +9,8 @@ use App\Services\FinancialReportService;
 use App\Services\PortfolioAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends Controller
 {
@@ -35,7 +35,7 @@ class ReportController extends Controller
         $clients = $this->portfolioAccess->scopeClients(Client::query(), $request->user())->orderBy('full_name')->get(['id', 'full_name']);
         $sellers = $this->portfolioAccess->scopeSellers(SellerProfile::query(), $request->user())->with('user')->where('status', 'active')->get();
 
-        return Inertia::render('Reports/Index', compact('type','from','to','summary','analytics','statusOptions','data','clients','sellers') + [
+        return Inertia::render('Reports/Index', compact('type', 'from', 'to', 'summary', 'analytics', 'statusOptions', 'data', 'clients', 'sellers') + [
             'types' => FinancialReportService::TYPES,
             'reportMeta' => $this->reports->reportMeta(),
             'headings' => $this->reports->headings($type),

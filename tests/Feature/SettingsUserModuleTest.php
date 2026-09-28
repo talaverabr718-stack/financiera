@@ -55,6 +55,7 @@ class SettingsUserModuleTest extends TestCase
             'password_confirmation' => 'Diferente-2026',
         ])->assertSessionHasErrors(['email', 'password']);
     }
+
     public function test_user_can_be_edited_without_replacing_existing_password(): void
     {
         $user = User::factory()->create(['password' => 'Clave-original-2026!']);

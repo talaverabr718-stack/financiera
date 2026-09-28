@@ -27,7 +27,8 @@ class AccountingService
                 $credit = bcadd($credit, $c, 2);
             }$entry->update(['total_debit' => $debit, 'total_credit' => $credit]);
 
-            $this->audit->record($entry, 'accounting.entry.created', $userId, [], $entry->only(['number','date','concept','document_type','document_number','total_debit','total_credit']));
+            $this->audit->record($entry, 'accounting.entry.created', $userId, [], $entry->only(['number', 'date', 'concept', 'document_type', 'document_number', 'total_debit', 'total_credit']));
+
             return $entry;
         });
     }
@@ -35,7 +36,7 @@ class AccountingService
     public function post(JournalEntry $entry, int $userId): JournalEntry
     {
         return DB::transaction(function () use ($entry, $userId) {
-            $entry = JournalEntry::with(['lines.account','accountingPeriod'])->lockForUpdate()->findOrFail($entry->id);
+            $entry = JournalEntry::with(['lines.account', 'accountingPeriod'])->lockForUpdate()->findOrFail($entry->id);
             if ($entry->status !== 'draft') {
                 throw ValidationException::withMessages(['entry' => 'Solo se contabilizan asientos en borrador.']);
             }if ($entry->lines->count() < 2 || bccomp((string) $entry->total_debit, (string) $entry->total_credit, 2) !== 0 || bccomp((string) $entry->total_debit, '0', 2) <= 0) {
@@ -55,7 +56,7 @@ class AccountingService
     public function reverse(JournalEntry $entry, string $reason, int $userId): JournalEntry
     {
         return DB::transaction(function () use ($entry, $reason, $userId) {
-            $entry = JournalEntry::with(['lines','accountingPeriod'])->lockForUpdate()->findOrFail($entry->id);
+            $entry = JournalEntry::with(['lines', 'accountingPeriod'])->lockForUpdate()->findOrFail($entry->id);
             if ($entry->status !== 'posted' || $entry->reversal()->exists()) {
                 throw ValidationException::withMessages(['reason' => 'Solo se reversan asientos contabilizados que no hayan sido reversados.']);
             }$period = $this->periodFor(today());
@@ -80,6 +81,7 @@ class AccountingService
         if ($period->status !== 'open') {
             throw ValidationException::withMessages(['date' => 'No se permiten movimientos en un período contable cerrado.']);
         }
+
         return $period;
     }
 }

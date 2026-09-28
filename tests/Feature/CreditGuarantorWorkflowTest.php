@@ -80,7 +80,7 @@ class CreditGuarantorWorkflowTest extends TestCase
         $this->assertDatabaseCount('guarantor_evaluations', 2);
         $this->actingAs($user)->get(route('applications.create'))
             ->assertOk()->assertInertia(fn (Assert $page) => $page
-                ->component('Applications/Form')->where('guarantors.0.full_name', 'Fiador Independiente'));
+            ->component('Applications/Form')->where('guarantors.0.full_name', 'Fiador Independiente'));
     }
 
     public function test_guarantor_and_application_approval_are_authorized_and_ordered(): void
@@ -107,6 +107,7 @@ class CreditGuarantorWorkflowTest extends TestCase
         $this->assertSame('released', $guarantee->fresh()->status);
         $this->assertNotNull($guarantee->fresh()->released_by);
     }
+
     public function test_credit_application_rejects_legacy_term_when_current_term_contract_is_missing(): void
     {
         $this->seed(ClientModuleSeeder::class);

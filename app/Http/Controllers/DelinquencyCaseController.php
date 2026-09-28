@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\CancelDelinquencyCaseRequest;
 use App\Http\Requests\RecalculateLoanDelinquencyRequest;
+use App\Models\Client;
 use App\Models\DelinquencyCase;
 use App\Models\Loan;
 use App\Services\DelinquencyTrackingService;
@@ -49,7 +50,7 @@ class DelinquencyCaseController extends Controller
 
         $cases = match ($sort) {
             'client' => $cases->orderBy(
-                \App\Models\Client::select('full_name')->whereColumn('clients.id', 'delinquency_cases.client_id'),
+                Client::select('full_name')->whereColumn('clients.id', 'delinquency_cases.client_id'),
                 $direction
             ),
             default => $cases->orderBy($column, $direction),

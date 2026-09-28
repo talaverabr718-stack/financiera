@@ -24,8 +24,12 @@ class AccountingPeriodController extends Controller
         $data = $request->validate(['notes' => ['required', 'string', 'max:1000']]);
         DB::transaction(function () use ($period, $data, $audit, $request) {
             $period = AccountingPeriod::lockForUpdate()->findOrFail($period->id);
-            if ($period->status !== 'open') throw ValidationException::withMessages(['period' => 'El período ya está cerrado.']);
-            if (JournalEntry::where('accounting_period_id', $period->id)->where('status', 'draft')->exists()) throw ValidationException::withMessages(['period' => 'Contabiliza o corrige todos los borradores antes de cerrar el período.']);
+            if ($period->status !== 'open') {
+                throw ValidationException::withMessages(['period' => 'El período ya está cerrado.']);
+            }
+            if (JournalEntry::where('accounting_period_id', $period->id)->where('status', 'draft')->exists()) {
+                throw ValidationException::withMessages(['period' => 'Contabiliza o corrige todos los borradores antes de cerrar el período.']);
+            }
             $period->update(['status' => 'closed', 'closed_by_id' => $request->user()->id, 'closed_at' => now(), 'closing_notes' => $data['notes']]);
             $audit->record($period, 'accounting.period.closed', $request->user()->id, ['status' => 'open'], ['status' => 'closed', 'closed_at' => $period->closed_at?->toISOString()], $data['notes']);
         });
@@ -38,7 +42,9 @@ class AccountingPeriodController extends Controller
         $data = $request->validate(['reason' => ['required', 'string', 'max:1000']]);
         DB::transaction(function () use ($period, $data, $audit, $request) {
             $period = AccountingPeriod::lockForUpdate()->findOrFail($period->id);
-            if ($period->status !== 'closed') throw ValidationException::withMessages(['period' => 'El período ya está abierto.']);
+            if ($period->status !== 'closed') {
+                throw ValidationException::withMessages(['period' => 'El período ya está abierto.']);
+            }
             $before = $period->only(['status', 'closed_by_id', 'closed_at']);
             $period->update(['status' => 'open', 'closed_by_id' => null, 'closed_at' => null, 'closing_notes' => null]);
             $audit->record($period, 'accounting.period.reopened', $request->user()->id, $before, ['status' => 'open'], $data['reason']);

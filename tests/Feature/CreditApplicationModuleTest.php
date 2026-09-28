@@ -160,7 +160,7 @@ class CreditApplicationModuleTest extends TestCase
 
         $this->get(route('products.edit', $product))
             ->assertOk()->assertInertia(fn (Assert $page) => $page
-                ->component('Products/Form')->where('editing', true)
-                ->has('product.payment_allocation_order', 4));
+            ->component('Products/Form')->where('editing', true)
+            ->has('product.payment_allocation_order', 4));
     }
 }

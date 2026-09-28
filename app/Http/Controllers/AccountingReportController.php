@@ -19,7 +19,7 @@ class AccountingReportController extends Controller
         $entries = JournalEntry::posted()->with(['lines.account', 'user'])->whereBetween('date', [$from, $to])->orderBy('date')->paginate(20)->withQueryString();
         $journalSummary = ['entries' => JournalEntry::posted()->whereBetween('date', [$from, $to])->count(), 'movement' => (float) JournalEntry::posted()->whereBetween('date', [$from, $to])->sum('total_debit'), 'reversals' => JournalEntry::where('status', 'reversed')->whereBetween('date', [$from, $to])->count()];
 
-        return Inertia::render('Accounting/Reports/Index', compact('entries','from','to','journalSummary') + ['report'=>'journal']);
+        return Inertia::render('Accounting/Reports/Index', compact('entries', 'from', 'to', 'journalSummary') + ['report' => 'journal']);
     }
 
     public function ledger(Request $request)
@@ -35,12 +35,16 @@ class AccountingReportController extends Controller
             $running = (float) $opening;
             $lines = JournalEntryLine::with('journalEntry')->where('account_id', $account->id)->whereHas('journalEntry', fn ($q) => $q->posted()->whereBetween('date', [$from, $to]))->get()->sortBy(fn ($line) => $line->journalEntry->date->format('Y-m-d').str_pad($line->journal_entry_id, 10, '0', STR_PAD_LEFT))->values()->map(function ($line) use (&$running, $account) {
                 $movement = $account->nature === 'debit' ? (float) $line->debit - (float) $line->credit : (float) $line->credit - (float) $line->debit;
-                $running = round($running + $movement, 2); $line->setAttribute('running_balance', $running); return $line;
+                $running = round($running + $movement, 2);
+                $line->setAttribute('running_balance', $running);
+
+                return $line;
             });
         }
 
         $ledgerSummary = ['debit' => round($lines->sum('debit'), 2), 'credit' => round($lines->sum('credit'), 2), 'closing' => $lines->last()?->running_balance ?? (float) $opening];
-        return Inertia::render('Accounting/Reports/Index', compact('accounts','account','lines','opening','from','to','ledgerSummary') + ['report'=>'ledger']);
+
+        return Inertia::render('Accounting/Reports/Index', compact('accounts', 'account', 'lines', 'opening', 'from', 'to', 'ledgerSummary') + ['report' => 'ledger']);
     }
 
     public function trial(Request $request)
@@ -51,7 +55,7 @@ class AccountingReportController extends Controller
         $trialSummary = ['debit' => round($accounts->sum('debit'), 2), 'credit' => round($accounts->sum('credit'), 2)];
         $trialSummary['difference'] = round($trialSummary['debit'] - $trialSummary['credit'], 2);
 
-        return Inertia::render('Accounting/Reports/Index', compact('accounts','from','to','trialSummary') + ['report'=>'trial']);
+        return Inertia::render('Accounting/Reports/Index', compact('accounts', 'from', 'to', 'trialSummary') + ['report' => 'trial']);
     }
 
     public function balanceSheet(Request $request)
@@ -73,7 +77,8 @@ class AccountingReportController extends Controller
             'current_result' => $currentResult,
         ];
         $totals['liabilities_equity'] = round($totals['liabilities'] + $totals['equity'] + $currentResult, 2);
-        $totals['income'] = round($income, 2); $totals['expenses'] = round($expenses, 2);
+        $totals['income'] = round($income, 2);
+        $totals['expenses'] = round($expenses, 2);
         $totals['net_margin'] = $income != 0 ? round($currentResult / $income * 100, 2) : 0;
         $analytics = [
             ['label' => 'Activos', 'value' => $totals['assets'], 'color' => '#1677e8'],
@@ -103,11 +108,13 @@ class AccountingReportController extends Controller
 
     private function incomeTrend(string $from, string $to)
     {
-        $rows = JournalEntryLine::with(['account:id,type,nature', 'journalEntry:id,date,status'])->whereHas('account', fn ($query) => $query->whereIn('type', ['revenue','other_income','expense','other_expense']))->whereHas('journalEntry', fn ($query) => $query->posted()->whereBetween('date', [$from, $to]))->get()->groupBy(fn ($line) => $line->journalEntry->date->format('Y-m'));
+        $rows = JournalEntryLine::with(['account:id,type,nature', 'journalEntry:id,date,status'])->whereHas('account', fn ($query) => $query->whereIn('type', ['revenue', 'other_income', 'expense', 'other_expense']))->whereHas('journalEntry', fn ($query) => $query->posted()->whereBetween('date', [$from, $to]))->get()->groupBy(fn ($line) => $line->journalEntry->date->format('Y-m'));
+
         return collect(CarbonPeriod::create(Carbon::parse($from)->startOfMonth(), '1 month', Carbon::parse($to)->startOfMonth()))->map(function ($month) use ($rows) {
             $lines = $rows->get($month->format('Y-m'), collect());
-            $income = $lines->whereIn('account.type', ['revenue','other_income'])->sum(fn ($line) => (float) $line->credit - (float) $line->debit);
-            $expenses = $lines->whereIn('account.type', ['expense','other_expense'])->sum(fn ($line) => (float) $line->debit - (float) $line->credit);
+            $income = $lines->whereIn('account.type', ['revenue', 'other_income'])->sum(fn ($line) => (float) $line->credit - (float) $line->debit);
+            $expenses = $lines->whereIn('account.type', ['expense', 'other_expense'])->sum(fn ($line) => (float) $line->debit - (float) $line->credit);
+
             return ['label' => $month->translatedFormat('M Y'), 'income' => round($income, 2), 'expenses' => round($expenses, 2), 'result' => round($income - $expenses, 2)];
         })->values();
     }
@@ -117,7 +124,9 @@ class AccountingReportController extends Controller
         $constraint = function ($query) use ($from, $to) {
             $query->whereHas('journalEntry', function ($entries) use ($from, $to) {
                 $entries->posted()->whereDate('date', '<=', $to);
-                if ($from) $entries->whereDate('date', '>=', $from);
+                if ($from) {
+                    $entries->whereDate('date', '>=', $from);
+                }
             });
         };
 
@@ -125,6 +134,7 @@ class AccountingReportController extends Controller
             $debit = (float) ($account->debit_total ?? 0);
             $credit = (float) ($account->credit_total ?? 0);
             $account->setAttribute('balance', $account->nature === 'debit' ? round($debit - $credit, 2) : round($credit - $debit, 2));
+
             return $account;
         })->filter(fn (Account $account) => abs($account->balance) >= 0.005)->values();
     }
@@ -134,6 +144,6 @@ class AccountingReportController extends Controller
         $debit = (string) $query->sum('debit');
         $credit = (string) (clone $query)->sum('credit');
 
-        return $account->nature === 'debit' ? bcsub($debit,$credit,2) : bcsub($credit,$debit,2);
+        return $account->nature === 'debit' ? bcsub($debit, $credit, 2) : bcsub($credit,$debit,2);
     }
 }

@@ -10,7 +10,7 @@ class AccountController extends Controller
 {
     public function index()
     {
-        return Inertia::render('Accounting/Accounts/Index', ['accounts' => Account::with('parent')->orderBy('code')->paginate(30), 'createUrl'=>route('accounting.accounts.create')]);
+        return Inertia::render('Accounting/Accounts/Index', ['accounts' => Account::with('parent')->orderBy('code')->paginate(30), 'createUrl' => route('accounting.accounts.create')]);
     }
 
     public function create()
@@ -39,7 +39,7 @@ class AccountController extends Controller
 
     private function form(Account $account)
     {
-        return Inertia::render('Accounting/Accounts/Form', ['account' => $account, 'parents' => Account::active()->whereKeyNot($account->id)->orderBy('code')->get(), 'types'=>Account::TYPES, 'editing'=>$account->exists, 'endpoints'=>['index'=>route('accounting.accounts.index'),'save'=>$account->exists?route('accounting.accounts.update',$account):route('accounting.accounts.store')]]);
+        return Inertia::render('Accounting/Accounts/Form', ['account' => $account, 'parents' => Account::active()->whereKeyNot($account->id)->orderBy('code')->get(), 'types' => Account::TYPES, 'editing' => $account->exists, 'endpoints' => ['index' => route('accounting.accounts.index'), 'save' => $account->exists ? route('accounting.accounts.update', $account) : route('accounting.accounts.store')]]);
     }
 
     private function save(Account $account, array $data): void

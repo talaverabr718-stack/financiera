@@ -86,8 +86,12 @@ class PermissionSettingsService
                     $view = true;
                     $manage = true;
                 }
-                if ($manage === true) $view = true;
-                if ($manage === false) $full = false;
+                if ($manage === true) {
+                    $view = true;
+                }
+                if ($manage === false) {
+                    $full = false;
+                }
                 if ($view === false) {
                     $manage = false;
                     $full = false;
@@ -95,6 +99,7 @@ class PermissionSettingsService
 
                 if ($view === null && $manage === null && $full === null) {
                     DB::table('system_module_user')->where(['user_id' => $locked->id, 'system_module_id' => $module->id])->delete();
+
                     continue;
                 }
 

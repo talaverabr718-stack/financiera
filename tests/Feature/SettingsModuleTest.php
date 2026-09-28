@@ -124,7 +124,7 @@ class SettingsModuleTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user)->get(route('settings.index'))->assertOk()->assertInertia(fn (Assert $page) => $page
             ->where('routes.logout', route('logout')));
-        $this->actingAs($user)->post(route('logout'))->assertRedirect('/');
+        $this->actingAs($user)->post(route('logout'))->assertRedirect('/ingresar');
         $this->assertGuest();
     }
 }
