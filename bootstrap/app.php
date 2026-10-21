@@ -14,6 +14,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Coolify terminates TLS at its reverse proxy. Trust its forwarded
+        // headers so Laravel generates HTTPS asset, route, and redirect URLs.
+        $middleware->trustProxies(at: '*');
+
         $middleware->web(append: [HandleInertiaRequests::class]);
         $middleware->append(SecurityHeaders::class);
         $middleware->alias(['module' => EnsureModuleAccess::class]);
