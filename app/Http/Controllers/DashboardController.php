@@ -30,11 +30,11 @@ class DashboardController extends Controller
         $user = request()->user();
         $loans = $this->portfolioAccess->scopeByClient(Loan::query(), $user);
         $stats = [
-            'activePortfolio' => (clone $loans)->whereIn('status', Loan::COLLECTIBLE_STATUSES)->selectRaw('COALESCE(SUM(principal_balance + interest_balance + fee_balance + delinquency_balance),0) total')->value('total'),
-            'placed' => (clone $loans)->whereBetween('disbursed_at', [now()->startOfMonth(), now()->endOfMonth()])->sum('principal'),
-            'placedLastMonth' => (clone $loans)->whereBetween('disbursed_at', [now()->subMonthNoOverflow()->startOfMonth(), now()->subMonthNoOverflow()->endOfMonth()])->sum('principal'),
-            'collectedToday' => $this->portfolioAccess->scopeByClient(CollectionRecord::query(), $user)->where('outcome', 'collected')->whereDate('recorded_at', today())->sum('amount'),
-            'collectedYesterday' => $this->portfolioAccess->scopeByClient(CollectionRecord::query(), $user)->where('outcome', 'collected')->whereDate('recorded_at', today()->subDay())->sum('amount'),
+            'activePortfolio' => (float) (clone $loans)->whereIn('status', Loan::COLLECTIBLE_STATUSES)->selectRaw('COALESCE(SUM(principal_balance + interest_balance + fee_balance + delinquency_balance),0) total')->value('total'),
+            'placed' => (float) (clone $loans)->whereBetween('disbursed_at', [now()->startOfMonth(), now()->endOfMonth()])->sum('principal'),
+            'placedLastMonth' => (float) (clone $loans)->whereBetween('disbursed_at', [now()->subMonthNoOverflow()->startOfMonth(), now()->subMonthNoOverflow()->endOfMonth()])->sum('principal'),
+            'collectedToday' => (float) $this->portfolioAccess->scopeByClient(CollectionRecord::query(), $user)->where('outcome', 'collected')->whereDate('recorded_at', today())->sum('amount'),
+            'collectedYesterday' => (float) $this->portfolioAccess->scopeByClient(CollectionRecord::query(), $user)->where('outcome', 'collected')->whereDate('recorded_at', today()->subDay())->sum('amount'),
             'activeLoans' => (clone $loans)->whereIn('status', Loan::COLLECTIBLE_STATUSES)->count(),
             'delinquentLoans' => (clone $loans)->where('status', 'delinquent')->count(),
             'pendingApplications' => $this->portfolioAccess->scopeByClient(CreditApplication::query(), $user)->whereIn('status', ['submitted', 'review', 'approved'])->count(),

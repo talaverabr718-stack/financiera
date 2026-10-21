@@ -3,18 +3,21 @@ set -eu
 
 cd /var/www/html
 
-if [ ! -f .env ]; then
+if [ "${APP_ENV:-local}" != "production" ] && [ ! -f .env ]; then
     cp .env.example .env
 fi
 
-composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
-
-if ! grep -qE '^APP_KEY=base64:.+' .env; then
+if [ -z "${APP_KEY:-}" ]; then
     echo 'APP_KEY no está configurada. Define una clave antes de iniciar la aplicación.' >&2
     exit 1
 fi
 
 php artisan storage:link --force >/dev/null 2>&1 || true
+php artisan optimize:clear --no-interaction
+php artisan config:cache --no-interaction
+php artisan event:cache --no-interaction
+php artisan route:cache --no-interaction
+php artisan view:cache --no-interaction
 
 if [ "${APP_RUN_MIGRATIONS:-false}" = "true" ]; then
     php artisan migrate --force --ansi

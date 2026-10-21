@@ -11,12 +11,19 @@ cd "$APP_DIR"
 npm ci --no-audit --no-fund
 npm run build
 
+"$PHP_BIN" artisan optimize:clear
+"$PHP_BIN" deployment/preflight.php
+
+if [[ "${SKIP_BACKUP_CHECK:-false}" != "true" && -z "${BACKUP_REFERENCE:-}" ]]; then
+    echo "Defina BACKUP_REFERENCE con la ruta o identificador del respaldo verificado antes de desplegar." >&2
+    exit 1
+fi
+
 "$PHP_BIN" artisan down --retry=60
 trap '"$PHP_BIN" artisan up' EXIT
 
 "$PHP_BIN" artisan migrate --force
 "$PHP_BIN" artisan storage:link --force
-"$PHP_BIN" artisan optimize:clear
 "$PHP_BIN" artisan config:cache
 "$PHP_BIN" artisan event:cache
 "$PHP_BIN" artisan route:cache

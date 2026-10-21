@@ -10,12 +10,15 @@ return new class extends Migration
     {
         Schema::create('collection_payment_correction_authorizations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('collection_record_id')->unique('collection_correction_authorization_record_unique')->constrained()->restrictOnDelete();
-            $table->foreignId('authorized_by')->constrained('users')->restrictOnDelete();
+            $table->foreignId('collection_record_id')->unique('collection_correction_authorization_record_unique')
+                ->constrained(indexName: 'collection_correction_record_fk')->restrictOnDelete();
+            $table->foreignId('authorized_by')
+                ->constrained('users', indexName: 'collection_correction_authorizer_fk')->restrictOnDelete();
             $table->text('reason');
             $table->timestamp('authorized_at');
             $table->timestamp('used_at')->nullable();
-            $table->foreignId('used_by')->nullable()->constrained('users')->restrictOnDelete();
+            $table->foreignId('used_by')->nullable()
+                ->constrained('users', indexName: 'collection_correction_user_fk')->restrictOnDelete();
             $table->timestamps();
         });
 

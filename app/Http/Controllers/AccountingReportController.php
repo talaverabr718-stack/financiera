@@ -144,6 +144,6 @@ class AccountingReportController extends Controller
         $debit = (string) $query->sum('debit');
         $credit = (string) (clone $query)->sum('credit');
 
-        return $account->nature === 'debit' ? bcsub($debit, $credit, 2) : bcsub($credit,$debit,2);
+        return $account->nature === 'debit' ? bcsub($debit, $credit, 2) : bcsub($credit, $debit, 2);
     }
 }

@@ -19,6 +19,10 @@ return new class extends Migration
 
         Schema::table('loans', function (Blueprint $table) {
             $table->unique(['client_id', 'open_guard'], 'loans_one_open_per_client_unique');
+            // MySQL may otherwise reuse the composite unique index for the
+            // existing client foreign key, which makes this migration
+            // impossible to roll back safely.
+            $table->index('client_id', 'loans_client_id_fk_support_index');
         });
     }
 

@@ -11,12 +11,14 @@ return new class extends Migration
         Schema::create('collection_additional_payment_authorizations', function (Blueprint $table) {
             $table->id();
             $table->foreignId('collection_route_stop_id')->unique('collection_second_payment_stop_unique')
-                ->constrained()->restrictOnDelete();
-            $table->foreignId('authorized_by')->constrained('users')->restrictOnDelete();
+                ->constrained(indexName: 'collection_second_payment_stop_fk')->restrictOnDelete();
+            $table->foreignId('authorized_by')
+                ->constrained('users', indexName: 'collection_second_payment_authorizer_fk')->restrictOnDelete();
             $table->text('reason');
             $table->timestamp('authorized_at');
             $table->timestamp('used_at')->nullable();
-            $table->foreignId('used_by')->nullable()->constrained('users')->restrictOnDelete();
+            $table->foreignId('used_by')->nullable()
+                ->constrained('users', indexName: 'collection_second_payment_user_fk')->restrictOnDelete();
             $table->timestamps();
         });
 

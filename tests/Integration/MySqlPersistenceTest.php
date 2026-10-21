@@ -3,14 +3,14 @@
 namespace Tests\Integration;
 
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 #[Group('mysql')]
 class MySqlPersistenceTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations;
 
     protected bool $authenticateByDefault = false;
 
