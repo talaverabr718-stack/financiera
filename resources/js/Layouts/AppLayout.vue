@@ -3,6 +3,7 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import AppSidebar from '../components/navigation/AppSidebar.vue';
 import AccountingNav from '../components/accounting/AccountingNav.vue';
+import ValidationSummary from '../components/ui/ValidationSummary.vue';
 
 defineProps({
     title: String,
@@ -110,6 +111,8 @@ watch(() => page.url, syncSearch);
                     </div>
                 </div>
                 <p v-if="page.props.flash?.success" class="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-400/10 px-4 py-3 text-xs font-semibold text-emerald-300">{{ page.props.flash.success }}</p>
+                <p v-if="page.props.flash?.error" class="mb-4 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-300" role="alert">{{ page.props.flash.error }}</p>
+                <ValidationSummary :errors="page.props.errors" />
                 <div v-if="!hideHeader" class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div><p class="eyebrow">{{ eyebrow }}</p><h1 class="page-title mt-1">{{ title }}</h1><p v-if="description" class="page-description">{{ description }}</p></div>
                     <div class="shrink-0"><slot name="header-actions" /></div>
