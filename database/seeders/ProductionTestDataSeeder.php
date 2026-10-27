@@ -44,17 +44,19 @@ class ProductionTestDataSeeder extends Seeder
             ));
 
             $collaborators = collect([
-                ['DEMO-GES-001', 'María Fernanda López', 'maria.lopez@example.invalid', 0],
-                ['DEMO-GES-002', 'Carlos Antonio Ruiz', 'carlos.ruiz@example.invalid', 1],
-                ['DEMO-GES-003', 'Diana Patricia Mena', 'diana.mena@example.invalid', 2],
+                ['DEMO-GES-001', 'María Fernanda López', 'maria.lopez@example.invalid', 'DEMO-COL-001', '8500-0001', 0],
+                ['DEMO-GES-002', 'Carlos Antonio Ruiz', 'carlos.ruiz@example.invalid', 'DEMO-COL-002', '8500-0002', 1],
+                ['DEMO-GES-003', 'Diana Patricia Mena', 'diana.mena@example.invalid', 'DEMO-COL-003', '8500-0003', 2],
             ])->map(fn (array $row) => SellerProfile::query()->updateOrCreate(
                 ['code' => $row[0]],
                 [
                     'user_id' => null,
                     'branch_id' => $branch->id,
-                    'zone_id' => $zones[$row[3]]->id,
+                    'zone_id' => $zones[$row[5]]->id,
                     'full_name' => $row[1],
                     'email' => $row[2],
+                    'identity_number' => $row[3],
+                    'phone' => $row[4],
                     'hired_at' => today()->subMonths(6),
                     'capabilities' => array_keys(SellerProfile::CAPABILITIES),
                     'notes' => 'Registro demostrativo para validación funcional.',
@@ -99,7 +101,7 @@ class ProductionTestDataSeeder extends Seeder
                     ['code' => 'DEMO-CLI-'.str_pad((string) $number, 3, '0', STR_PAD_LEFT)],
                     [
                         'full_name' => $name,
-                        'identity_number' => null,
+                        'identity_number' => 'DEMO-CLI-ID-'.str_pad((string) $number, 3, '0', STR_PAD_LEFT),
                         'birth_date' => now()->subYears(25 + $index)->subMonths($index)->toDateString(),
                         'phone' => '8000-'.str_pad((string) $number, 4, '0', STR_PAD_LEFT),
                         'email' => 'cliente'.$number.'@example.invalid',
@@ -110,8 +112,15 @@ class ProductionTestDataSeeder extends Seeder
                         'latitude' => $latitude,
                         'longitude' => $longitude,
                         'economic_activity' => $index % 2 === 0 ? 'Comercio minorista' : 'Servicios',
+                        'workplace' => $index % 2 === 0 ? 'Negocio propio de demostración' : 'Empresa de servicios demostrativa',
+                        'job_position' => $index % 2 === 0 ? 'Propietario' : 'Técnico de servicios',
+                        'workplace_address' => 'Dirección laboral ficticia, Estelí',
+                        'employment_duration_months' => 18 + ($index * 3),
                         'estimated_income' => $income,
+                        'other_income' => 1200 + ($index * 100),
                         'estimated_expenses' => $expenses,
+                        'housing_status' => $index % 3 === 0 ? 'owned' : 'rented',
+                        'dependents' => $index % 4,
                         'status' => 'active',
                         'notes' => 'Cliente ficticio creado para pruebas; no corresponde a una persona real.',
                         'deleted_at' => null,
@@ -161,12 +170,17 @@ class ProductionTestDataSeeder extends Seeder
                         'payment_frequency' => 'weekly',
                         'interest_rate' => null,
                         'interest_method' => null,
+                        'proposed_first_payment_date' => today()->addWeek(),
                         'administrative_fee' => '0.00',
-                        'economic_snapshot' => ['source' => 'production_test_data', 'test_only' => true],
+                        'economic_snapshot' => ['source' => 'production_test_data', 'test_only' => true, 'monthly_income' => $clients[$clientIndex]->estimated_income, 'monthly_expenses' => $clients[$clientIndex]->estimated_expenses],
+                        'requires_guarantor' => false,
                         'seller_notes' => 'Datos ficticios para pruebas. La política financiera no está configurada.',
+                        'analyst_notes' => in_array($status, ['approved', 'disbursed'], true) ? 'Expediente demostrativo revisado para validar la interfaz.' : null,
                         'decided_by' => in_array($status, ['approved', 'disbursed'], true) ? $actor->id : null,
                         'decided_at' => in_array($status, ['approved', 'disbursed'], true) ? now()->subDays(2) : null,
                         'approved_at' => in_array($status, ['approved', 'disbursed'], true) ? now()->subDays(2) : null,
+                        'estimated_last_payment_date' => in_array($status, ['approved', 'disbursed'], true) ? today()->addWeeks(12) : null,
+                        'decision_reason' => in_array($status, ['approved', 'disbursed'], true) ? 'Aprobación ficticia exclusiva para pruebas funcionales.' : null,
                     ]
                 );
             });

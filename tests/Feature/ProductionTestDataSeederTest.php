@@ -35,6 +35,8 @@ class ProductionTestDataSeederTest extends TestCase
             CreditApplication::count(), Loan::count(),
         ]);
         $this->assertDatabaseHas('branches', ['code' => 'DEMO-EST-01', 'is_active' => true]);
+        $this->assertDatabaseHas('clients', ['code' => 'DEMO-CLI-001', 'identity_number' => 'DEMO-CLI-ID-001', 'workplace' => 'Negocio propio de demostración']);
+        $this->assertDatabaseHas('seller_profiles', ['code' => 'DEMO-GES-001', 'identity_number' => 'DEMO-COL-001', 'phone' => '8500-0001']);
         $this->assertSame(8, Client::where('code', 'like', 'DEMO-%')->count());
         $this->assertSame(3, SellerProfile::where('code', 'like', 'DEMO-%')->count());
         $this->assertSame(5, CreditApplication::where('number', 'like', 'DEMO-%')->count());

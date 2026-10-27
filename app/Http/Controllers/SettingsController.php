@@ -9,6 +9,7 @@ use App\Http\Requests\UpdateGeneralSettingsRequest;
 use App\Http\Requests\UpdateModuleSettingsRequest;
 use App\Http\Requests\UpdateSequenceSettingsRequest;
 use App\Models\Account;
+use App\Models\Branch;
 use App\Models\CreditProduct;
 use App\Models\SystemModule;
 use App\Models\SystemSetting;
@@ -39,6 +40,7 @@ class SettingsController extends Controller
             'users' => User::exists(),
             'appearance' => SystemSetting::where('group', 'appearance')->exists(),
             'general' => filled($general['institution_name'] ?? null),
+            'branches' => Branch::where('is_active', true)->exists(),
             'financial' => CreditProduct::where('is_active', true)->exists(),
             'accounting' => count(array_filter($accounting)) === 5,
             'sequences' => DB::table('document_sequences')->exists(),
@@ -172,7 +174,7 @@ class SettingsController extends Controller
 
     public static function tabs(string $active)
     {
-        $labels = ['index' => 'Resumen', 'brand' => 'Marca', 'modules' => 'Módulos', 'users' => 'Usuarios', 'permissions' => 'Permisos', 'appearance' => 'Apariencia', 'general' => 'Institución', 'financial' => 'Financiera', 'accounting' => 'Contabilidad', 'sequences' => 'Consecutivos'];
+        $labels = ['index' => 'Resumen', 'brand' => 'Marca', 'modules' => 'Módulos', 'users' => 'Usuarios', 'branches' => 'Sucursales', 'permissions' => 'Permisos', 'appearance' => 'Apariencia', 'general' => 'Institución', 'financial' => 'Financiera', 'accounting' => 'Contabilidad', 'sequences' => 'Consecutivos'];
 
         return collect($labels)->map(fn ($label, $name) => ['label' => $label, 'url' => route('settings.'.$name), 'active' => $name === $active])->values();
     }

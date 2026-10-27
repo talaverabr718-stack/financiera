@@ -7,6 +7,7 @@ use App\Http\Controllers\AccountingReportController;
 use App\Http\Controllers\AmortizationCalculatorController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\BranchController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CollaboratorController;
 use App\Http\Controllers\CollectionController;
@@ -109,6 +110,13 @@ Route::middleware('auth')->group(function () {
     Route::prefix('configuracion')->name('settings.')->group(function () {
         Route::get('/', [SettingsController::class, 'index'])->middleware('module:settings')->name('index');
         Route::get('/general', [SettingsController::class, 'general'])->middleware('module:settings')->name('general');
+        Route::get('/sucursales', [BranchController::class, 'index'])->middleware('module:settings')->name('branches');
+        Route::post('/sucursales', [BranchController::class, 'store'])->middleware('module:settings,full')->name('branches.store');
+        Route::put('/sucursales/{branch}', [BranchController::class, 'update'])->middleware('module:settings,full')->name('branches.update');
+        Route::patch('/sucursales/{branch}/estado', [BranchController::class, 'status'])->middleware('module:settings,full')->name('branches.status');
+        Route::post('/sucursales/{branch}/zonas', [BranchController::class, 'storeZone'])->middleware('module:settings,full')->name('branches.zones.store');
+        Route::put('/sucursales/{branch}/zonas/{zone}', [BranchController::class, 'updateZone'])->middleware('module:settings,full')->scopeBindings()->name('branches.zones.update');
+        Route::patch('/sucursales/{branch}/zonas/{zone}/estado', [BranchController::class, 'zoneStatus'])->middleware('module:settings,full')->scopeBindings()->name('branches.zones.status');
         Route::put('/general', [SettingsController::class, 'updateGeneral'])->middleware('module:settings,full')->name('general.update');
         Route::get('/financiera', [SettingsController::class, 'financial'])->middleware('module:settings')->name('financial');
         Route::get('/contabilidad', [SettingsController::class, 'accounting'])->middleware('module:settings')->name('accounting');

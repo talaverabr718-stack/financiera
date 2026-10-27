@@ -102,6 +102,7 @@ const configurationGroups = computed(() => [
             { key: 'brand', title: 'Marca', description: 'Nombre, descripción y logotipo del sistema.', icon: 'brand' },
             { key: 'appearance', title: 'Apariencia', description: 'Tema, paleta, tipografía y densidad visual.', icon: 'appearance' },
             { key: 'general', title: 'Institución', description: 'Información legal y datos de contacto.', icon: 'institution' },
+            { key: 'branches', title: 'Sucursales', description: 'Sedes activas y alcance operativo.', icon: 'institution' },
         ],
     },
     {
